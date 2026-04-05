@@ -6,6 +6,7 @@ const xss = require("xss-clean");
 const rateLimit = require("express-rate-limit");
 const mongoSanitize = require("express-mongo-sanitize");
 const requestLogger = require("../middlewares/logger");
+const setupSwagger = require("../../docs/setup");
 
 // Register models
 require("../models/User");
@@ -49,16 +50,20 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
+const isDev = process.env.NODE_ENV !== "production";
+
 app.use(
   helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'"],
-        imgSrc: ["'self'", "data:", "https:"],
-      },
-    },
+    contentSecurityPolicy: isDev
+      ? false  // Swagger UI needs unsafe-inline scripts — disable CSP in dev
+      : {
+          directives: {
+            defaultSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            scriptSrc: ["'self'"],
+            imgSrc: ["'self'", "data:", "https:"],
+          },
+        },
     crossOriginEmbedderPolicy: false,
   })
 );
@@ -66,5 +71,7 @@ app.use(
 app.use(mongoSanitize());
 app.use(xss());
 app.use(hpp());
+
+setupSwagger(app);
 
 module.exports = { app, express };

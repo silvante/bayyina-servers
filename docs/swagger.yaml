@@ -1,0 +1,831 @@
+openapi: 3.0.3
+
+info:
+  title: Bayyina CRM API
+  description: |
+    REST API for Bayyina CRM — an education center management system.
+
+    ## Authentication
+    All protected endpoints require a Bearer token in the `Authorization` header:
+    ```
+    Authorization: Bearer <token>
+    ```
+    Tokens are obtained via `POST /api/auth/login` or `POST /api/auth/verify-otp`.
+    Tokens expire after **30 days**.
+
+    ## Roles
+    | Role      | Description                                      |
+    |-----------|--------------------------------------------------|
+    | `admin`   | Full access to all resources                     |
+    | `teacher` | Read access to students; manage groups/payments  |
+    | `student` | Read-only access to own data                     |
+
+    ## Error Format
+    All errors follow this structure:
+    ```json
+    { "code": "errorCode", "message": "Human readable message" }
+    ```
+
+  version: 1.0.0
+  contact:
+    name: Mardonbek Khamidov
+    email: mardonbek@bayyina.uz
+
+servers:
+  - url: http://localhost:4000/api
+    description: Local development
+  - url: https://api.bayyina.uz/api
+    description: Production
+
+tags:
+  - name: Auth
+    description: Authentication — login, OTP, and profile
+  - name: Users
+    description: User management (admin creates/manages teachers and students)
+
+# ─────────────────────────────────────────────
+# Security scheme
+# ─────────────────────────────────────────────
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token issued on login or OTP verification. Valid for 30 days.
+
+  # ─────────────────────────────────────────────
+  # Reusable schemas
+  # ─────────────────────────────────────────────
+  schemas:
+
+    # ── User ────────────────────────────────────
+    User:
+      type: object
+      description: Full user object (password never returned)
+      properties:
+        _id:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c0d"
+        firstName:
+          type: string
+          example: "Jasur"
+        lastName:
+          type: string
+          example: "Toshmatov"
+        phone:
+          type: integer
+          example: 998901234567
+        role:
+          type: string
+          enum: [admin, teacher, student]
+          example: "student"
+        telegramId:
+          type: string
+          nullable: true
+          example: "123456789"
+        gender:
+          type: string
+          enum: [male, female]
+          nullable: true
+          example: "male"
+        age:
+          type: integer
+          nullable: true
+          example: 18
+        source:
+          type: string
+          nullable: true
+          description: How the student found out about the center
+          example: "Instagram"
+        isActive:
+          type: boolean
+          example: true
+        avatar:
+          $ref: "#/components/schemas/Image"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-06-01T10:00:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-06-10T08:30:00.000Z"
+
+    UserInput:
+      type: object
+      required: [firstName, phone, password]
+      properties:
+        firstName:
+          type: string
+          example: "Jasur"
+        lastName:
+          type: string
+          example: "Toshmatov"
+        phone:
+          type: integer
+          description: Uzbek phone number (9 digits after country code)
+          example: 998901234567
+        password:
+          type: string
+          minLength: 6
+          example: "secret123"
+        role:
+          type: string
+          enum: [teacher, student]
+          default: "student"
+          example: "student"
+        telegramId:
+          type: string
+          example: "123456789"
+        gender:
+          type: string
+          enum: [male, female]
+          example: "male"
+        age:
+          type: integer
+          minimum: 1
+          example: 18
+        source:
+          type: string
+          example: "Instagram"
+        groupId:
+          type: string
+          description: Required when role is `student`
+          example: "664f1a2b3c4d5e6f7a8b9c01"
+        groupIds:
+          type: array
+          description: Required when role is `teacher` — list of group IDs to assign
+          items:
+            type: string
+          example: ["664f1a2b3c4d5e6f7a8b9c01", "664f1a2b3c4d5e6f7a8b9c02"]
+
+    UserUpdateInput:
+      type: object
+      description: |
+        Any user can update: `firstName`, `lastName`, `avatar`, `telegramId`, `gender`, `age`, `source`.
+        Admin can additionally update: `role`, `isActive`, `password`.
+      properties:
+        firstName:
+          type: string
+          example: "Jasur"
+        lastName:
+          type: string
+          example: "Toshmatov"
+        avatar:
+          type: string
+          description: Image document ID
+          example: "664f1a2b3c4d5e6f7a8b9c0e"
+        telegramId:
+          type: string
+          example: "123456789"
+        gender:
+          type: string
+          enum: [male, female]
+          example: "female"
+        age:
+          type: integer
+          example: 20
+        source:
+          type: string
+          example: "Friend referral"
+        role:
+          type: string
+          enum: [admin, teacher, student]
+          description: Admin only
+          example: "teacher"
+        isActive:
+          type: boolean
+          description: Admin only
+          example: false
+        password:
+          type: string
+          minLength: 6
+          description: Admin only
+          example: "newpassword"
+
+    # ── Image ────────────────────────────────────
+    Image:
+      type: object
+      nullable: true
+      properties:
+        _id:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c0e"
+        url:
+          type: string
+          example: "https://cdn.bayyina.uz/images/avatar.jpg"
+
+    # ── Pagination ───────────────────────────────
+    PaginationMeta:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 42
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 10
+        totalPages:
+          type: integer
+          example: 5
+
+    # ── Auth responses ───────────────────────────
+    TokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        user:
+          $ref: "#/components/schemas/User"
+        code:
+          type: string
+          example: "loginSuccess"
+        message:
+          type: string
+          example: "Hisobingizga kirdingiz"
+
+    OtpSentResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "codeSent"
+        message:
+          type: string
+          example: "Tasdiqlash kodi yuborildi"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-06-01T10:00:00.000Z"
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2024-06-01T10:05:00.000Z"
+
+    # ── Generic responses ────────────────────────
+    SuccessMessage:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "userDeleted"
+        message:
+          type: string
+          example: "Foydalanuvchi muvaffaqiyatli o'chirildi"
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "invalidCredentials"
+        message:
+          type: string
+          example: "Telefon raqam yoki parol noto'g'ri"
+
+  # ─────────────────────────────────────────────
+  # Reusable parameters
+  # ─────────────────────────────────────────────
+  parameters:
+    userId:
+      name: id
+      in: path
+      required: true
+      description: MongoDB ObjectId of the user
+      schema:
+        type: string
+        example: "664f1a2b3c4d5e6f7a8b9c0d"
+
+    pageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+      description: Page number (1-based)
+
+    limitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 10
+      description: Number of results per page
+
+  # ─────────────────────────────────────────────
+  # Reusable responses
+  # ─────────────────────────────────────────────
+  responses:
+    Unauthorized:
+      description: Missing or invalid token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            tokenMissing:
+              summary: No token provided
+              value: { code: "tokenMissing", message: "Token mavjud emas" }
+            tokenExpired:
+              summary: Token has expired
+              value: { code: "tokenExpired", message: "Token muddati tugagan" }
+            invalidToken:
+              summary: Token is malformed
+              value: { code: "invalidToken", message: "Yaroqsiz token kiritildi" }
+
+    Forbidden:
+      description: Authenticated but insufficient role
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: "forbidden"
+            message: "Ruxsat berilmadi"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: "userNotFound"
+            message: "Foydalanuvchi topilmadi"
+
+    BadRequest:
+      description: Validation error or bad input
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    TooManyRequests:
+      description: Rate limit exceeded (120 req / 3 min)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: "tooManyRequests"
+            message: "Juda ko'p so'rovlar. Iltimos, 3 daqiqadan keyin urinib ko'ring"
+
+# ═════════════════════════════════════════════
+# PATHS
+# ═════════════════════════════════════════════
+paths:
+
+  # ══════════════════════════════════════════
+  # AUTH
+  # ══════════════════════════════════════════
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with phone and password
+      description: |
+        Authenticates a user using their phone number and password.
+        Returns a JWT token valid for **30 days** and the user object (without password).
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, password]
+              properties:
+                phone:
+                  type: integer
+                  example: 998901234567
+                password:
+                  type: string
+                  minLength: 6
+                  example: "secret123"
+            example:
+              phone: 998901234567
+              password: "secret123"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          description: Invalid phone, password too short, or wrong credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalidPhone:
+                  value: { code: "invalidPhone", message: "Telefon raqam noto'g'ri" }
+                invalidPassword:
+                  value: { code: "invalidPassword", message: "Parol juda ham qisqa" }
+                invalidCredentials:
+                  value: { code: "invalidCredentials", message: "Telefon raqam yoki parol noto'g'ri" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /auth/send-otp:
+    post:
+      tags: [Auth]
+      summary: Send OTP code to a phone number
+      description: |
+        Sends a 6-digit one-time password (OTP) to the given phone number.
+        The OTP is valid for **5 minutes**. If a code was already sent within the last
+        60 seconds the existing code info is returned instead of sending a new one.
+      operationId: sendOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: integer
+                  example: 998901234567
+      responses:
+        "200":
+          description: OTP sent (or already sent recently)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OtpSentResponse"
+              examples:
+                codeSent:
+                  summary: New code sent
+                  value:
+                    code: "codeSent"
+                    message: "Tasdiqlash kodi yuborildi"
+                    createdAt: "2024-06-01T10:00:00.000Z"
+                    expiresAt: "2024-06-01T10:05:00.000Z"
+                codeAlreadySent:
+                  summary: Code already sent within last 60s
+                  value:
+                    code: "codeAlreadySent"
+                    message: "Kod allaqachon yuborilgan"
+                    createdAt: "2024-06-01T10:00:00.000Z"
+                    expiresAt: "2024-06-01T10:05:00.000Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /auth/verify-otp:
+    post:
+      tags: [Auth]
+      summary: Verify OTP and receive a JWT token
+      description: |
+        Validates the 6-digit OTP against the phone number.
+        Returns a JWT token and user object on success.
+
+        **OTP expires after 5 minutes.**
+      operationId: verifyOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code]
+              properties:
+                phone:
+                  type: integer
+                  example: 998901234567
+                code:
+                  type: integer
+                  description: 6-digit OTP received via SMS/Telegram
+                  example: 482931
+      responses:
+        "200":
+          description: OTP verified — token issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          description: OTP invalid or expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                codeInvalid:
+                  value: { code: "codeInvalid", message: "Kod noto'g'ri" }
+                codeExpired:
+                  value: { code: "codeExpired", message: "Kod muddati tugagan, qayta yuboring" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /auth/profile:
+    get:
+      tags: [Auth]
+      summary: Get current authenticated user's profile
+      description: Returns the full profile of the user associated with the Bearer token.
+      operationId: getProfile
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Profile returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: "#/components/schemas/User"
+                  code:
+                    type: string
+                    example: "profileSuccess"
+                  message:
+                    type: string
+                    example: "Profil ma'lumotlari olindi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ══════════════════════════════════════════
+  # USERS
+  # ══════════════════════════════════════════
+
+  /users:
+    get:
+      tags: [Users]
+      summary: List users
+      description: |
+        Returns a paginated list of users.
+
+        **Access rules:**
+        - `admin` — sees all users; can filter by `role`
+        - `teacher` — sees students only (role filter ignored)
+        - `student` — sees only themselves
+      operationId: getUsers
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/pageParam"
+        - $ref: "#/components/parameters/limitParam"
+        - name: role
+          in: query
+          description: Filter by role (admin only)
+          schema:
+            type: string
+            enum: [admin, teacher, student]
+          example: "student"
+      responses:
+        "200":
+          description: Users returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/User"
+                  total:
+                    type: integer
+                    example: 42
+                  page:
+                    type: integer
+                    example: 1
+                  limit:
+                    type: integer
+                    example: 10
+                  totalPages:
+                    type: integer
+                    example: 5
+                  code:
+                    type: string
+                    example: "usersFound"
+                  message:
+                    type: string
+                    example: "Foydalanuvchilar ro'yxati olindi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    post:
+      tags: [Users]
+      summary: Create a user
+      description: |
+        Creates a new `teacher` or `student` account.
+
+        **Access:** Admin only.
+
+        **Role-specific requirements:**
+        - `student` — must provide `groupId` (single group); an Enrollment is automatically created.
+        - `teacher` — must provide `groupIds` (array); the teacher is assigned to those groups.
+      operationId: createUser
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserInput"
+            examples:
+              createStudent:
+                summary: Create a student
+                value:
+                  firstName: "Jasur"
+                  lastName: "Toshmatov"
+                  phone: 998901234567
+                  password: "secret123"
+                  role: "student"
+                  groupId: "664f1a2b3c4d5e6f7a8b9c01"
+                  gender: "male"
+                  age: 18
+                  source: "Instagram"
+              createTeacher:
+                summary: Create a teacher
+                value:
+                  firstName: "Sarvinoz"
+                  lastName: "Yusupova"
+                  phone: 998997654321
+                  password: "teacher456"
+                  role: "teacher"
+                  groupIds: ["664f1a2b3c4d5e6f7a8b9c01", "664f1a2b3c4d5e6f7a8b9c02"]
+      responses:
+        "201":
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: "#/components/schemas/User"
+                  code:
+                    type: string
+                    example: "userCreated"
+                  message:
+                    type: string
+                    example: "Foydalanuvchi muvaffaqiyatli yaratildi"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missingName:
+                  value: { code: "missingField", message: "Ism va Familiya kiritilishi shart" }
+                invalidPhone:
+                  value: { code: "invalidPhone", message: "Telefon raqam noto'g'ri" }
+                phoneUsed:
+                  value: { code: "phoneAlreadyUsed", message: "Telefon raqam allaqachon ishlatilgan" }
+                groupRequired:
+                  value: { code: "missingField", message: "Talaba bitta guruhga biriktirilishi shart (groupId)" }
+                groupNotFound:
+                  value: { code: "groupNotFound", message: "Guruh topilmadi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /users/{id}:
+    get:
+      tags: [Users]
+      summary: Get a user by ID
+      description: |
+        Returns a single user by their MongoDB ObjectId.
+
+        **Access:** Admin and teacher only.
+      operationId: getUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/userId"
+      responses:
+        "200":
+          description: User found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: "#/components/schemas/User"
+                  code:
+                    type: string
+                    example: "usersFound"
+                  message:
+                    type: string
+                    example: "Foydalanuvchilar ro'yxati olindi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    put:
+      tags: [Users]
+      summary: Update a user
+      description: |
+        Updates a user's profile fields.
+
+        **Access rules:**
+        - Any authenticated user can update: `firstName`, `lastName`, `avatar`, `telegramId`, `gender`, `age`, `source`
+        - `student` can only update themselves
+        - `admin` can additionally update: `role`, `isActive`, `password`
+      operationId: updateUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/userId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdateInput"
+            examples:
+              updateProfile:
+                summary: Update name and source
+                value:
+                  firstName: "Jasur"
+                  source: "Friend referral"
+              adminDeactivate:
+                summary: Admin deactivates a user
+                value:
+                  isActive: false
+      responses:
+        "200":
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: "#/components/schemas/User"
+                  code:
+                    type: string
+                    example: "userUpdated"
+                  message:
+                    type: string
+                    example: "Foydalanuvchi muvaffaqiyatli yangilandi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    delete:
+      tags: [Users]
+      summary: Delete a user
+      description: |
+        Permanently deletes a user by ID.
+
+        **Access:** Admin only.
+
+        > **Warning:** This does not cascade-delete related Enrollments or Payments.
+        > Consider deactivating (`isActive: false`) instead of deleting.
+      operationId: deleteUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/userId"
+      responses:
+        "200":
+          description: User deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+              example:
+                code: "userDeleted"
+                message: "Foydalanuvchi muvaffaqiyatli o'chirildi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
