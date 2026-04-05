@@ -75,7 +75,11 @@ const getEnrollment = async (req, res, next) => {
 
 // POST /enrollments — admin or teacher
 const createEnrollment = async (req, res, next) => {
-  const { student, group } = req.body;
+  const {
+    student, group,
+    courseType, startDate, monthlyFee, discount, discountReason,
+    paymentDay, lastPaymentDate, nextPaymentDate, debt, balance,
+  } = req.body;
 
   if (!student) {
     return res.status(400).json({ code: "missingField", message: "O'quvchi kiritilishi shart" });
@@ -90,7 +94,19 @@ const createEnrollment = async (req, res, next) => {
       return res.status(400).json({ code: "alreadyEnrolled", message: texts.alreadyEnrolled });
     }
 
-    const enrollment = await Enrollment.create({ student, group });
+    const enrollment = await Enrollment.create({
+      student, group,
+      ...(courseType && { courseType }),
+      ...(startDate && { startDate: new Date(startDate) }),
+      ...(monthlyFee != null && { monthlyFee }),
+      ...(discount != null && { discount }),
+      ...(discountReason && { discountReason }),
+      ...(paymentDay != null && { paymentDay }),
+      ...(lastPaymentDate && { lastPaymentDate: new Date(lastPaymentDate) }),
+      ...(nextPaymentDate && { nextPaymentDate: new Date(nextPaymentDate) }),
+      ...(debt != null && { debt }),
+      ...(balance != null && { balance }),
+    });
 
     const populated = await enrollment.populate([
       { path: "student", select: "firstName lastName phone" },
@@ -103,19 +119,35 @@ const createEnrollment = async (req, res, next) => {
   }
 };
 
-// PUT /enrollments/:id — update status
+// PUT /enrollments/:id — update status and financial fields
 const updateEnrollment = async (req, res, next) => {
   try {
-    const { status } = req.body;
-    const allowed = ["active", "completed", "dropped"];
+    const { status, courseType, startDate, monthlyFee, discount, discountReason, paymentDay, lastPaymentDate, nextPaymentDate, debt, balance } = req.body;
+    const allowedStatuses = ["active", "completed", "dropped"];
 
-    if (!status || !allowed.includes(status)) {
-      return res.status(400).json({ code: "invalidStatus", message: "Status noto'g'ri" });
+    const updates = {};
+
+    if (status !== undefined) {
+      if (!allowedStatuses.includes(status)) {
+        return res.status(400).json({ code: "invalidStatus", message: "Status noto'g'ri" });
+      }
+      updates.status = status;
     }
+
+    if (courseType !== undefined) updates.courseType = courseType;
+    if (startDate !== undefined) updates.startDate = new Date(startDate);
+    if (monthlyFee !== undefined) updates.monthlyFee = monthlyFee;
+    if (discount !== undefined) updates.discount = discount;
+    if (discountReason !== undefined) updates.discountReason = discountReason;
+    if (paymentDay !== undefined) updates.paymentDay = paymentDay;
+    if (lastPaymentDate !== undefined) updates.lastPaymentDate = new Date(lastPaymentDate);
+    if (nextPaymentDate !== undefined) updates.nextPaymentDate = new Date(nextPaymentDate);
+    if (debt !== undefined) updates.debt = debt;
+    if (balance !== undefined) updates.balance = balance;
 
     const enrollment = await Enrollment.findByIdAndUpdate(
       req.params.id,
-      { status },
+      updates,
       { new: true }
     ).populate({ path: "student", select: "firstName lastName phone" });
 

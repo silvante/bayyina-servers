@@ -52,7 +52,7 @@ const getUser = async (req, res, next) => {
 
 // POST /users — admin creates teacher or student
 const createUser = async (req, res, next) => {
-  const { firstName, lastName, phone, password, role, groupIds, groupId } = req.body;
+  const { firstName, lastName, phone, password, role, groupIds, groupId, telegramId, gender, age, source } = req.body;
 
   if (!firstName || !lastName) {
     return res.status(400).json({ code: "missingField", message: "Ism va Familiya kiritilishi shart" });
@@ -111,6 +111,10 @@ const createUser = async (req, res, next) => {
       phone: Number(phone),
       password,
       role: effectiveRole,
+      ...(telegramId && { telegramId }),
+      ...(gender && { gender }),
+      ...(age && { age: Number(age) }),
+      ...(source && { source }),
     });
 
     // Attach to groups
@@ -139,7 +143,7 @@ const updateUser = async (req, res, next) => {
       return res.status(403).json({ code: "forbidden", message: texts.forbidden });
     }
 
-    const allowed = ["firstName", "lastName", "avatar"];
+    const allowed = ["firstName", "lastName", "avatar", "telegramId", "gender", "age", "source"];
     if (req.user.role === "admin") allowed.push("role", "isActive", "password");
 
     const updates = pickAllowedFields(req.body, allowed);
