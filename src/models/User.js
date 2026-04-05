@@ -15,7 +15,7 @@ const User = new mongoose.Schema(
     isActive: { type: Boolean, default: true },
     avatar: { type: mongoose.Schema.Types.ObjectId, ref: "Image" },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 async function hashPassword(password) {
@@ -23,11 +23,13 @@ async function hashPassword(password) {
   return bcrypt.hash(password, salt);
 }
 
-User.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
-  this.password = await hashPassword(this.password);
-  next();
-});
+// Password hash qilinmasligi uchun Comentariyaga olib qoyildi
+
+// User.pre("save", async function (next) {
+//   if (!this.isModified("password")) return next();
+//   this.password = await hashPassword(this.password);
+//   next();
+// });
 
 const updateHooks = [
   "updateOne",
@@ -48,7 +50,7 @@ updateHooks.forEach((hook) => {
 });
 
 User.methods.comparePassword = async function (password) {
-  return bcrypt.compare(password, this.password);
+  return password === this.password;
 };
 
 module.exports = mongoose.model("User", User);
