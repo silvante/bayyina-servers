@@ -1,13 +1,13 @@
-const agenda = require("../config/agenda");
-
-const loadJobs = () => {
-  require("./paymentJobs");
-  console.log("Agenda job'lari yuklandi ✅");
-};
+const { initAgenda } = require("../config/agenda");
+const { loadPaymentJobs } = require("./paymentJobs");
 
 const startAgenda = async () => {
   try {
-    loadJobs();
+    const agenda = initAgenda();
+
+    loadPaymentJobs();
+    console.log("Agenda job'lari yuklandi ✅");
+
     await agenda.start();
     console.log("Agenda muvaffaqiyatli ishga tushdi ✅");
   } catch (error) {
@@ -16,4 +16,4 @@ const startAgenda = async () => {
   }
 };
 
-module.exports = { loadJobs, startAgenda };
+module.exports = { startAgenda };
