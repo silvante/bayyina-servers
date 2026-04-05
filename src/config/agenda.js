@@ -1,12 +1,13 @@
 const Agenda = require("agenda");
-const mongoose = require("mongoose");
 
 let _agenda = null;
 
 const initAgenda = () => {
   _agenda = new Agenda({
-    mongo: mongoose.connection.db,
-    db: { collection: "agendaJobs" },
+    db: {
+      address: process.env.MONGODB_URL,
+      collection: "agendaJobs",
+    },
     processEvery: "10 seconds",
     maxConcurrency: 20,
   });
