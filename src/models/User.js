@@ -1,4 +1,3 @@
-const bcrypt = require("bcrypt");
 const mongoose = require("mongoose");
 
 const User = new mongoose.Schema(
@@ -18,36 +17,6 @@ const User = new mongoose.Schema(
   { timestamps: true },
 );
 
-async function hashPassword(password) {
-  const salt = await bcrypt.genSalt(10);
-  return bcrypt.hash(password, salt);
-}
-
-// Password hash qilinmasligi uchun Comentariyaga olib qoyildi
-
-// User.pre("save", async function (next) {
-//   if (!this.isModified("password")) return next();
-//   this.password = await hashPassword(this.password);
-//   next();
-// });
-
-const updateHooks = [
-  "updateOne",
-  "updateMany",
-  "findOneAndUpdate",
-  "findByIdAndUpdate",
-];
-
-updateHooks.forEach((hook) => {
-  User.pre(hook, async function (next) {
-    const update = this.getUpdate();
-    if (update && update.password) {
-      update.password = await hashPassword(update.password);
-      this.setUpdate(update);
-    }
-    next();
-  });
-});
 
 User.methods.comparePassword = async function (password) {
   return password === this.password;

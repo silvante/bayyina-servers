@@ -1,6 +1,8 @@
 const texts = require("../data/texts");
 const { pickAllowedFields, getPagination, buildPaginationMeta, isValidPhone } = require("../utils/helpers");
 const User = require("../models/User");
+const Group = require("../models/Group");
+const Enrollment = require("../models/Enrollment");
 
 // GET /users — admin: all users, teacher: own students, student: only self
 const getUsers = async (req, res, next) => {
@@ -50,10 +52,10 @@ const getUser = async (req, res, next) => {
 
 // POST /users — admin creates teacher or student
 const createUser = async (req, res, next) => {
-  const { firstName, lastName, phone, password, role } = req.body;
+  const { firstName, lastName, phone, password, role, groupIds, groupId } = req.body;
 
-  if (!firstName) {
-    return res.status(400).json({ code: "missingField", message: "Ism kiritilishi shart" });
+  if (!firstName || !lastName) {
+    return res.status(400).json({ code: "missingField", message: "Ism va Familiya kiritilishi shart" });
   }
 
   if (!isValidPhone(phone)) {
@@ -64,9 +66,22 @@ const createUser = async (req, res, next) => {
     return res.status(400).json({ code: "invalidPassword", message: texts.invalidPassword });
   }
 
+  const effectiveRole = role || "student";
   const allowedRoles = ["teacher", "student"];
-  if (role && !allowedRoles.includes(role)) {
+  if (!allowedRoles.includes(effectiveRole)) {
     return res.status(400).json({ code: "roleNotAllowed", message: "Ushbu rolga ruxsat berilmaydi" });
+  }
+
+  if (effectiveRole === "teacher") {
+    if (!groupIds || !Array.isArray(groupIds) || groupIds.length === 0) {
+      return res.status(400).json({ code: "missingField", message: "O'qituvchi kamida bitta guruhga biriktirilishi shart (groupIds)" });
+    }
+  }
+
+  if (effectiveRole === "student") {
+    if (!groupId) {
+      return res.status(400).json({ code: "missingField", message: "Talaba bitta guruhga biriktirilishi shart (groupId)" });
+    }
   }
 
   try {
@@ -75,13 +90,35 @@ const createUser = async (req, res, next) => {
       return res.status(400).json({ code: "phoneAlreadyUsed", message: texts.phoneAlreadyUsed });
     }
 
+    // Validate groups exist before creating the user
+    if (effectiveRole === "teacher") {
+      const foundGroups = await Group.find({ _id: { $in: groupIds } });
+      if (foundGroups.length !== groupIds.length) {
+        return res.status(400).json({ code: "groupNotFound", message: "Bir yoki bir nechta guruh topilmadi" });
+      }
+    }
+
+    if (effectiveRole === "student") {
+      const group = await Group.findById(groupId);
+      if (!group) {
+        return res.status(400).json({ code: "groupNotFound", message: "Guruh topilmadi" });
+      }
+    }
+
     const user = await User.create({
       firstName,
       lastName,
       phone: Number(phone),
       password,
-      role: role || "student",
+      role: effectiveRole,
     });
+
+    // Attach to groups
+    if (effectiveRole === "teacher") {
+      await Group.updateMany({ _id: { $in: groupIds } }, { teacher: user._id });
+    } else {
+      await Enrollment.create({ student: user._id, group: groupId });
+    }
 
     const userObj = user.toObject();
     delete userObj.password;
