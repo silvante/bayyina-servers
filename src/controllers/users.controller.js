@@ -1,0 +1,137 @@
+const texts = require("../data/texts");
+const { pickAllowedFields, getPagination, buildPaginationMeta, isValidPhone } = require("../utils/helpers");
+const User = require("../models/User");
+
+// GET /users — admin: all users, teacher: own students, student: only self
+const getUsers = async (req, res, next) => {
+  try {
+    const { page, limit, skip } = getPagination(req.query);
+    const { role } = req.query;
+
+    const filter = {};
+    if (role) filter.role = role;
+
+    if (req.user.role === "teacher") {
+      // Teachers can only see students (no sensitive management)
+      filter.role = "student";
+    } else if (req.user.role === "student") {
+      // Students can only see themselves
+      filter._id = req.user._id;
+    }
+
+    const [users, total] = await Promise.all([
+      User.find(filter).populate("avatar").select("-password").skip(skip).limit(limit).sort({ createdAt: -1 }),
+      User.countDocuments(filter),
+    ]);
+
+    res.json({
+      users,
+      ...buildPaginationMeta(total, page, limit),
+      code: "usersFound",
+      message: texts.usersFound,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /users/:id
+const getUser = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.id).populate("avatar").select("-password");
+    if (!user) {
+      return res.status(404).json({ code: "userNotFound", message: texts.userNotFound });
+    }
+    res.json({ user, code: "usersFound", message: texts.usersFound });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /users — admin creates teacher or student
+const createUser = async (req, res, next) => {
+  const { firstName, lastName, phone, password, role } = req.body;
+
+  if (!firstName) {
+    return res.status(400).json({ code: "missingField", message: "Ism kiritilishi shart" });
+  }
+
+  if (!isValidPhone(phone)) {
+    return res.status(400).json({ code: "invalidPhone", message: texts.invalidPhone });
+  }
+
+  if (String(password)?.length < 6) {
+    return res.status(400).json({ code: "invalidPassword", message: texts.invalidPassword });
+  }
+
+  const allowedRoles = ["teacher", "student"];
+  if (role && !allowedRoles.includes(role)) {
+    return res.status(400).json({ code: "roleNotAllowed", message: "Ushbu rolga ruxsat berilmaydi" });
+  }
+
+  try {
+    const existing = await User.findOne({ phone: Number(phone) });
+    if (existing) {
+      return res.status(400).json({ code: "phoneAlreadyUsed", message: texts.phoneAlreadyUsed });
+    }
+
+    const user = await User.create({
+      firstName,
+      lastName,
+      phone: Number(phone),
+      password,
+      role: role || "student",
+    });
+
+    const userObj = user.toObject();
+    delete userObj.password;
+
+    res.status(201).json({ user: userObj, code: "userCreated", message: texts.userCreated });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// PUT /users/:id — admin updates any user, user updates self
+const updateUser = async (req, res, next) => {
+  try {
+    const targetId = req.params.id;
+
+    // Students can only update themselves
+    if (req.user.role === "student" && String(req.user._id) !== String(targetId)) {
+      return res.status(403).json({ code: "forbidden", message: texts.forbidden });
+    }
+
+    const allowed = ["firstName", "lastName", "avatar"];
+    if (req.user.role === "admin") allowed.push("role", "isActive", "password");
+
+    const updates = pickAllowedFields(req.body, allowed);
+
+    const user = await User.findByIdAndUpdate(targetId, updates, { new: true })
+      .populate("avatar")
+      .select("-password");
+
+    if (!user) {
+      return res.status(404).json({ code: "userNotFound", message: texts.userNotFound });
+    }
+
+    res.json({ user, code: "userUpdated", message: texts.userUpdated });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// DELETE /users/:id — admin only
+const deleteUser = async (req, res, next) => {
+  try {
+    const user = await User.findByIdAndDelete(req.params.id);
+    if (!user) {
+      return res.status(404).json({ code: "userNotFound", message: texts.userNotFound });
+    }
+    res.json({ code: "userDeleted", message: texts.userDeleted });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getUsers, getUser, createUser, updateUser, deleteUser };
