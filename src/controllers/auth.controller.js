@@ -119,7 +119,7 @@ const verifyOtp = async (req, res, next) => {
 // Get current user profile
 const profile = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user._id).populate("avatar").select("-password");
+    const user = await User.findById(req.user._id).select("-password");
     res.json({ user, code: "profileSuccess", message: texts.profileSuccess });
   } catch (err) {
     next(err);

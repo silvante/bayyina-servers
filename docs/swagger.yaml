@@ -42,6 +42,8 @@ tags:
     description: Authentication — login, OTP, and profile
   - name: Users
     description: User management (admin creates/manages teachers and students)
+  - name: Groups
+    description: Group management — link courses, teachers, and students
 
 # ─────────────────────────────────────────────
 # Security scheme
@@ -98,11 +100,6 @@ components:
           nullable: true
           description: How the student found out about the center
           example: "Instagram"
-        isActive:
-          type: boolean
-          example: true
-        avatar:
-          $ref: "#/components/schemas/Image"
         createdAt:
           type: string
           format: date-time
@@ -163,8 +160,8 @@ components:
     UserUpdateInput:
       type: object
       description: |
-        Any user can update: `firstName`, `lastName`, `avatar`, `telegramId`, `gender`, `age`, `source`.
-        Admin can additionally update: `role`, `isActive`, `password`.
+        Any user can update: `firstName`, `lastName`, `telegramId`, `gender`, `age`, `source`.
+        Admin can additionally update: `role`, `password`.
       properties:
         firstName:
           type: string
@@ -172,10 +169,6 @@ components:
         lastName:
           type: string
           example: "Toshmatov"
-        avatar:
-          type: string
-          description: Image document ID
-          example: "664f1a2b3c4d5e6f7a8b9c0e"
         telegramId:
           type: string
           example: "123456789"
@@ -194,15 +187,173 @@ components:
           enum: [admin, teacher, student]
           description: Admin only
           example: "teacher"
-        isActive:
-          type: boolean
-          description: Admin only
-          example: false
         password:
           type: string
           minLength: 6
           description: Admin only
           example: "newpassword"
+
+    # ── Group ────────────────────────────────────
+    Group:
+      type: object
+      description: A class group that links a course, a teacher, and enrolled students
+      properties:
+        _id:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c10"
+        name:
+          type: string
+          example: "Python — Oqshom 1"
+        course:
+          type: object
+          description: Populated course (name, price, duration)
+          properties:
+            _id:
+              type: string
+              example: "664f1a2b3c4d5e6f7a8b9c20"
+            name:
+              type: string
+              example: "Python dasturlash"
+            price:
+              type: number
+              example: 450000
+            duration:
+              type: integer
+              description: Duration in months
+              example: 3
+        teacher:
+          type: object
+          description: Populated teacher (firstName, lastName, phone)
+          properties:
+            _id:
+              type: string
+              example: "664f1a2b3c4d5e6f7a8b9c0d"
+            firstName:
+              type: string
+              example: "Sarvinoz"
+            lastName:
+              type: string
+              example: "Yusupova"
+            phone:
+              type: integer
+              example: 998997654321
+        schedule:
+          type: object
+          properties:
+            days:
+              type: array
+              items:
+                type: string
+              example: ["Monday", "Wednesday", "Friday"]
+            time:
+              type: string
+              example: "09:00"
+        room:
+          type: string
+          nullable: true
+          example: "Room 3"
+        startDate:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-09-01T00:00:00.000Z"
+        endDate:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-12-01T00:00:00.000Z"
+        isActive:
+          type: boolean
+          example: true
+        createdBy:
+          type: string
+          description: Admin user ID who created the group
+          example: "664f1a2b3c4d5e6f7a8b9c0f"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-06-01T10:00:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-06-10T08:30:00.000Z"
+
+    GroupInput:
+      type: object
+      required: [name, course, teacher]
+      properties:
+        name:
+          type: string
+          example: "Python — Oqshom 1"
+        course:
+          type: string
+          description: Course ObjectId
+          example: "664f1a2b3c4d5e6f7a8b9c20"
+        teacher:
+          type: string
+          description: Teacher User ObjectId
+          example: "664f1a2b3c4d5e6f7a8b9c0d"
+        schedule:
+          type: object
+          properties:
+            days:
+              type: array
+              items:
+                type: string
+              example: ["Monday", "Wednesday", "Friday"]
+            time:
+              type: string
+              example: "09:00"
+        room:
+          type: string
+          example: "Room 3"
+        startDate:
+          type: string
+          format: date
+          example: "2024-09-01"
+        endDate:
+          type: string
+          format: date
+          example: "2024-12-01"
+
+    GroupUpdateInput:
+      type: object
+      description: All fields are optional. Admin only.
+      properties:
+        name:
+          type: string
+          example: "Python — Kunduz 2"
+        course:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c20"
+        teacher:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c0d"
+        schedule:
+          type: object
+          properties:
+            days:
+              type: array
+              items:
+                type: string
+              example: ["Tuesday", "Thursday"]
+            time:
+              type: string
+              example: "11:00"
+        room:
+          type: string
+          example: "Room 5"
+        startDate:
+          type: string
+          format: date
+          example: "2024-09-01"
+        endDate:
+          type: string
+          format: date
+          example: "2024-12-01"
+        isActive:
+          type: boolean
+          example: false
 
     # ── Image ────────────────────────────────────
     Image:
@@ -300,6 +451,15 @@ components:
       schema:
         type: string
         example: "664f1a2b3c4d5e6f7a8b9c0d"
+
+    groupId:
+      name: id
+      in: path
+      required: true
+      description: MongoDB ObjectId of the group
+      schema:
+        type: string
+        example: "664f1a2b3c4d5e6f7a8b9c10"
 
     pageParam:
       name: page
@@ -747,9 +907,9 @@ paths:
         Updates a user's profile fields.
 
         **Access rules:**
-        - Any authenticated user can update: `firstName`, `lastName`, `avatar`, `telegramId`, `gender`, `age`, `source`
+        - Any authenticated user can update: `firstName`, `lastName`, `telegramId`, `gender`, `age`, `source`
         - `student` can only update themselves
-        - `admin` can additionally update: `role`, `isActive`, `password`
+        - `admin` can additionally update: `role`, `password`
       operationId: updateUser
       security:
         - BearerAuth: []
@@ -767,10 +927,10 @@ paths:
                 value:
                   firstName: "Jasur"
                   source: "Friend referral"
-              adminDeactivate:
-                summary: Admin deactivates a user
+              adminChangeRole:
+                summary: Admin changes a user's role
                 value:
-                  isActive: false
+                  role: "teacher"
       responses:
         "200":
           description: User updated successfully
@@ -805,7 +965,6 @@ paths:
         **Access:** Admin only.
 
         > **Warning:** This does not cascade-delete related Enrollments or Payments.
-        > Consider deactivating (`isActive: false`) instead of deleting.
       operationId: deleteUser
       security:
         - BearerAuth: []
@@ -827,5 +986,303 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ══════════════════════════════════════════
+  # GROUPS
+  # ══════════════════════════════════════════
+
+  /groups:
+    get:
+      tags: [Groups]
+      summary: List groups
+      description: |
+        Returns a paginated list of groups.
+
+        **Access rules:**
+        - `admin` — sees all groups; can filter by `course` and `isActive`
+        - `teacher` — sees only their own groups (filter by teacher is applied automatically)
+      operationId: getGroups
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/pageParam"
+        - $ref: "#/components/parameters/limitParam"
+        - name: course
+          in: query
+          description: Filter by Course ObjectId
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c20"
+        - name: isActive
+          in: query
+          description: Filter by active status (admin only — teachers always see their own groups regardless)
+          schema:
+            type: boolean
+            example: true
+      responses:
+        "200":
+          description: Groups returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  groups:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Group"
+                  total:
+                    type: integer
+                    example: 8
+                  page:
+                    type: integer
+                    example: 1
+                  limit:
+                    type: integer
+                    example: 10
+                  totalPages:
+                    type: integer
+                    example: 1
+                  code:
+                    type: string
+                    example: "groupsFound"
+                  message:
+                    type: string
+                    example: "Guruhlar ro'yxati olindi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    post:
+      tags: [Groups]
+      summary: Create a group
+      description: |
+        Creates a new group linked to a course and a teacher.
+
+        **Access:** Admin only.
+
+        `name`, `course`, and `teacher` are required. `schedule`, `room`, `startDate`, `endDate` are optional.
+      operationId: createGroup
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GroupInput"
+            examples:
+              basicGroup:
+                summary: Minimal group
+                value:
+                  name: "Python — Oqshom 1"
+                  course: "664f1a2b3c4d5e6f7a8b9c20"
+                  teacher: "664f1a2b3c4d5e6f7a8b9c0d"
+              fullGroup:
+                summary: Group with full schedule
+                value:
+                  name: "Python — Kunduz 2"
+                  course: "664f1a2b3c4d5e6f7a8b9c20"
+                  teacher: "664f1a2b3c4d5e6f7a8b9c0d"
+                  schedule:
+                    days: ["Monday", "Wednesday", "Friday"]
+                    time: "09:00"
+                  room: "Room 3"
+                  startDate: "2024-09-01"
+                  endDate: "2024-12-01"
+      responses:
+        "201":
+          description: Group created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  group:
+                    $ref: "#/components/schemas/Group"
+                  code:
+                    type: string
+                    example: "groupCreated"
+                  message:
+                    type: string
+                    example: "Guruh muvaffaqiyatli yaratildi"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missingName:
+                  value: { code: "missingField", message: "Guruh nomi kiritilishi shart" }
+                missingCourse:
+                  value: { code: "missingField", message: "Kurs kiritilishi shart" }
+                missingTeacher:
+                  value: { code: "missingField", message: "O'qituvchi kiritilishi shart" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /groups/{id}:
+    get:
+      tags: [Groups]
+      summary: Get a group by ID
+      description: |
+        Returns a single group populated with course and teacher details.
+
+        **Access rules:**
+        - `admin` — can access any group
+        - `teacher` — can only access their own group (returns 403 otherwise)
+      operationId: getGroup
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/groupId"
+      responses:
+        "200":
+          description: Group found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  group:
+                    $ref: "#/components/schemas/Group"
+                  code:
+                    type: string
+                    example: "groupsFound"
+                  message:
+                    type: string
+                    example: "Guruhlar ro'yxati olindi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "groupNotFound"
+                message: "Guruh topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    put:
+      tags: [Groups]
+      summary: Update a group
+      description: |
+        Updates one or more fields of an existing group.
+
+        **Access:** Admin only.
+
+        Updatable fields: `name`, `course`, `teacher`, `schedule`, `room`, `startDate`, `endDate`, `isActive`.
+      operationId: updateGroup
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/groupId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GroupUpdateInput"
+            examples:
+              changeTeacher:
+                summary: Reassign teacher
+                value:
+                  teacher: "664f1a2b3c4d5e6f7a8b9c0d"
+              deactivate:
+                summary: Deactivate a group
+                value:
+                  isActive: false
+              reschedule:
+                summary: Update schedule and room
+                value:
+                  schedule:
+                    days: ["Tuesday", "Thursday"]
+                    time: "14:00"
+                  room: "Room 7"
+      responses:
+        "200":
+          description: Group updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  group:
+                    $ref: "#/components/schemas/Group"
+                  code:
+                    type: string
+                    example: "groupUpdated"
+                  message:
+                    type: string
+                    example: "Guruh muvaffaqiyatli yangilandi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "groupNotFound"
+                message: "Guruh topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    delete:
+      tags: [Groups]
+      summary: Delete a group
+      description: |
+        Permanently deletes a group by ID.
+
+        **Access:** Admin only.
+
+        > **Warning:** This does not cascade-delete related Enrollments or Payments.
+        > Consider setting `isActive: false` instead.
+      operationId: deleteGroup
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/groupId"
+      responses:
+        "200":
+          description: Group deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+              example:
+                code: "groupDeleted"
+                message: "Guruh muvaffaqiyatli o'chirildi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "groupNotFound"
+                message: "Guruh topilmadi"
         "429":
           $ref: "#/components/responses/TooManyRequests"

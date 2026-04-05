@@ -22,7 +22,7 @@ const getUsers = async (req, res, next) => {
     }
 
     const [users, total] = await Promise.all([
-      User.find(filter).populate("avatar").select("-password").skip(skip).limit(limit).sort({ createdAt: -1 }),
+      User.find(filter).select("-password").skip(skip).limit(limit).sort({ createdAt: -1 }),
       User.countDocuments(filter),
     ]);
 
@@ -40,7 +40,7 @@ const getUsers = async (req, res, next) => {
 // GET /users/:id
 const getUser = async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.id).populate("avatar").select("-password");
+    const user = await User.findById(req.params.id).select("-password");
     if (!user) {
       return res.status(404).json({ code: "userNotFound", message: texts.userNotFound });
     }
@@ -143,13 +143,12 @@ const updateUser = async (req, res, next) => {
       return res.status(403).json({ code: "forbidden", message: texts.forbidden });
     }
 
-    const allowed = ["firstName", "lastName", "avatar", "telegramId", "gender", "age", "source"];
-    if (req.user.role === "admin") allowed.push("role", "isActive", "password");
+    const allowed = ["firstName", "lastName", "telegramId", "gender", "age", "source"];
+    if (req.user.role === "admin") allowed.push("role", "password");
 
     const updates = pickAllowedFields(req.body, allowed);
 
     const user = await User.findByIdAndUpdate(targetId, updates, { new: true })
-      .populate("avatar")
       .select("-password");
 
     if (!user) {

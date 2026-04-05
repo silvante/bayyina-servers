@@ -15,8 +15,6 @@ const User = new mongoose.Schema(
     gender: { type: String, enum: ["male", "female"] },
     age: { type: Number },
     source: { type: String },
-    isActive: { type: Boolean, default: true },
-    avatar: { type: mongoose.Schema.Types.ObjectId, ref: "Image" },
   },
   { timestamps: true },
 );
