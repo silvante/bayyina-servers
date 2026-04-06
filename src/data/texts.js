@@ -25,13 +25,6 @@ const texts = {
   userNotFound: "Foydalanuvchi topilmadi",
   usersFound: "Foydalanuvchilar ro'yxati olindi",
 
-  // Courses
-  courseCreated: "Kurs muvaffaqiyatli yaratildi",
-  courseUpdated: "Kurs muvaffaqiyatli yangilandi",
-  courseDeleted: "Kurs muvaffaqiyatli o'chirildi",
-  courseNotFound: "Kurs topilmadi",
-  coursesFound: "Kurslar ro'yxati olindi",
-
   // Groups
   groupCreated: "Guruh muvaffaqiyatli yaratildi",
   groupUpdated: "Guruh muvaffaqiyatli yangilandi",

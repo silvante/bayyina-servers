@@ -42,10 +42,8 @@ tags:
     description: Authentication — login, OTP, and profile
   - name: Users
     description: User management (admin creates/manages teachers and students)
-  - name: Courses
-    description: Course catalogue management
   - name: Groups
-    description: Group management — link courses, teachers, and students
+    description: Group management — each group defines a course name, price, teacher, and schedule
 
 # ─────────────────────────────────────────────
 # Security scheme
@@ -195,108 +193,10 @@ components:
           description: Admin only
           example: "newpassword"
 
-    # ── Course ───────────────────────────────────
-    Course:
-      type: object
-      description: A course in the education centre catalogue
-      properties:
-        _id:
-          type: string
-          example: "664f1a2b3c4d5e6f7a8b9c20"
-        name:
-          type: string
-          example: "Python dasturlash"
-        description:
-          type: string
-          nullable: true
-          example: "Boshlang'ich darajadan professional darajagacha"
-        duration:
-          type: integer
-          nullable: true
-          description: Duration in months
-          example: 3
-        price:
-          type: number
-          description: Monthly fee in UZS
-          example: 450000
-        image:
-          $ref: "#/components/schemas/Image"
-        isActive:
-          type: boolean
-          example: true
-        createdBy:
-          type: object
-          description: Populated admin (firstName, lastName)
-          properties:
-            _id:
-              type: string
-              example: "664f1a2b3c4d5e6f7a8b9c0f"
-            firstName:
-              type: string
-              example: "Mardonbek"
-            lastName:
-              type: string
-              example: "Khamidov"
-        createdAt:
-          type: string
-          format: date-time
-          example: "2024-06-01T10:00:00.000Z"
-        updatedAt:
-          type: string
-          format: date-time
-          example: "2024-06-10T08:30:00.000Z"
-
-    CourseInput:
-      type: object
-      required: [name, price]
-      properties:
-        name:
-          type: string
-          example: "Python dasturlash"
-        description:
-          type: string
-          example: "Boshlang'ich darajadan professional darajagacha"
-        duration:
-          type: integer
-          description: Duration in months
-          example: 3
-        price:
-          type: number
-          description: Monthly fee in UZS
-          example: 450000
-        image:
-          type: string
-          description: Image document ObjectId
-          example: "664f1a2b3c4d5e6f7a8b9c0e"
-
-    CourseUpdateInput:
-      type: object
-      description: All fields optional. Admin only.
-      properties:
-        name:
-          type: string
-          example: "Python Pro"
-        description:
-          type: string
-          example: "Yangilangan kurs"
-        duration:
-          type: integer
-          example: 4
-        price:
-          type: number
-          example: 500000
-        image:
-          type: string
-          description: Image document ObjectId
-          example: "664f1a2b3c4d5e6f7a8b9c0e"
-        isActive:
-          type: boolean
-          example: false
-
     # ── Group ────────────────────────────────────
     Group:
       type: object
-      description: A class group that links a course, a teacher, and enrolled students
+      description: A group that defines a subject, price, teacher, and schedule
       properties:
         _id:
           type: string
@@ -304,23 +204,14 @@ components:
         name:
           type: string
           example: "Python — Oqshom 1"
-        course:
-          type: object
-          description: Populated course (name, price, duration)
-          properties:
-            _id:
-              type: string
-              example: "664f1a2b3c4d5e6f7a8b9c20"
-            name:
-              type: string
-              example: "Python dasturlash"
-            price:
-              type: number
-              example: 450000
-            duration:
-              type: integer
-              description: Duration in months
-              example: 3
+        description:
+          type: string
+          nullable: true
+          example: "Boshlang'ich darajadan professional darajagacha"
+        price:
+          type: number
+          description: Monthly fee in UZS
+          example: 450000
         teacher:
           type: object
           description: Populated teacher (firstName, lastName, phone)
@@ -352,19 +243,6 @@ components:
           type: string
           nullable: true
           example: "Room 3"
-        startDate:
-          type: string
-          format: date-time
-          nullable: true
-          example: "2024-09-01T00:00:00.000Z"
-        endDate:
-          type: string
-          format: date-time
-          nullable: true
-          example: "2024-12-01T00:00:00.000Z"
-        isActive:
-          type: boolean
-          example: true
         createdBy:
           type: string
           description: Admin user ID who created the group
@@ -380,15 +258,18 @@ components:
 
     GroupInput:
       type: object
-      required: [name, course, teacher]
+      required: [name, price, teacher]
       properties:
         name:
           type: string
           example: "Python — Oqshom 1"
-        course:
+        description:
           type: string
-          description: Course ObjectId
-          example: "664f1a2b3c4d5e6f7a8b9c20"
+          example: "Boshlang'ich darajadan professional darajagacha"
+        price:
+          type: number
+          description: Monthly fee in UZS
+          example: 450000
         teacher:
           type: string
           description: Teacher User ObjectId
@@ -407,14 +288,6 @@ components:
         room:
           type: string
           example: "Room 3"
-        startDate:
-          type: string
-          format: date
-          example: "2024-09-01"
-        endDate:
-          type: string
-          format: date
-          example: "2024-12-01"
 
     GroupUpdateInput:
       type: object
@@ -423,9 +296,12 @@ components:
         name:
           type: string
           example: "Python — Kunduz 2"
-        course:
+        description:
           type: string
-          example: "664f1a2b3c4d5e6f7a8b9c20"
+          example: "Yangilangan guruh"
+        price:
+          type: number
+          example: 500000
         teacher:
           type: string
           example: "664f1a2b3c4d5e6f7a8b9c0d"
@@ -443,29 +319,6 @@ components:
         room:
           type: string
           example: "Room 5"
-        startDate:
-          type: string
-          format: date
-          example: "2024-09-01"
-        endDate:
-          type: string
-          format: date
-          example: "2024-12-01"
-        isActive:
-          type: boolean
-          example: false
-
-    # ── Image ────────────────────────────────────
-    Image:
-      type: object
-      nullable: true
-      properties:
-        _id:
-          type: string
-          example: "664f1a2b3c4d5e6f7a8b9c0e"
-        url:
-          type: string
-          example: "https://cdn.bayyina.uz/images/avatar.jpg"
 
     # ── Pagination ───────────────────────────────
     PaginationMeta:
@@ -551,15 +404,6 @@ components:
       schema:
         type: string
         example: "664f1a2b3c4d5e6f7a8b9c0d"
-
-    courseId:
-      name: id
-      in: path
-      required: true
-      description: MongoDB ObjectId of the course
-      schema:
-        type: string
-        example: "664f1a2b3c4d5e6f7a8b9c20"
 
     groupId:
       name: id
@@ -1099,282 +943,6 @@ paths:
           $ref: "#/components/responses/TooManyRequests"
 
   # ══════════════════════════════════════════
-  # COURSES
-  # ══════════════════════════════════════════
-
-  /courses:
-    get:
-      tags: [Courses]
-      summary: List courses
-      description: |
-        Returns a paginated list of courses, each populated with its image and the admin who created it.
-
-        **Access:** Any authenticated user (admin, teacher, student).
-
-        Optionally filter by `isActive` to show only active or inactive courses.
-      operationId: getCourses
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/pageParam"
-        - $ref: "#/components/parameters/limitParam"
-        - name: isActive
-          in: query
-          description: Filter by active status
-          schema:
-            type: boolean
-            example: true
-      responses:
-        "200":
-          description: Courses returned
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  courses:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Course"
-                  total:
-                    type: integer
-                    example: 5
-                  page:
-                    type: integer
-                    example: 1
-                  limit:
-                    type: integer
-                    example: 10
-                  totalPages:
-                    type: integer
-                    example: 1
-                  code:
-                    type: string
-                    example: "coursesFound"
-                  message:
-                    type: string
-                    example: "Kurslar ro'yxati olindi"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
-
-    post:
-      tags: [Courses]
-      summary: Create a course
-      description: |
-        Creates a new course in the catalogue.
-
-        **Access:** Admin only.
-
-        `name` and `price` are required. All other fields are optional.
-      operationId: createCourse
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CourseInput"
-            examples:
-              minimal:
-                summary: Minimal course
-                value:
-                  name: "Python dasturlash"
-                  price: 450000
-              full:
-                summary: Full course with image
-                value:
-                  name: "Python dasturlash"
-                  description: "Boshlang'ich darajadan professional darajagacha"
-                  duration: 3
-                  price: 450000
-                  image: "664f1a2b3c4d5e6f7a8b9c0e"
-      responses:
-        "201":
-          description: Course created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  course:
-                    $ref: "#/components/schemas/Course"
-                  code:
-                    type: string
-                    example: "courseCreated"
-                  message:
-                    type: string
-                    example: "Kurs muvaffaqiyatli yaratildi"
-        "400":
-          description: Validation error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                missingName:
-                  value: { code: "missingField", message: "Kurs nomi kiritilishi shart" }
-                missingPrice:
-                  value: { code: "missingField", message: "Narx kiritilishi shart" }
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
-
-  /courses/{id}:
-    get:
-      tags: [Courses]
-      summary: Get a course by ID
-      description: |
-        Returns a single course populated with its image and creator.
-
-        **Access:** Any authenticated user.
-      operationId: getCourse
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/courseId"
-      responses:
-        "200":
-          description: Course found
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  course:
-                    $ref: "#/components/schemas/Course"
-                  code:
-                    type: string
-                    example: "coursesFound"
-                  message:
-                    type: string
-                    example: "Kurslar ro'yxati olindi"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          description: Course not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              example:
-                code: "courseNotFound"
-                message: "Kurs topilmadi"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
-
-    put:
-      tags: [Courses]
-      summary: Update a course
-      description: |
-        Updates one or more fields of an existing course.
-
-        **Access:** Admin only.
-
-        Updatable fields: `name`, `description`, `duration`, `price`, `image`, `isActive`.
-      operationId: updateCourse
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/courseId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CourseUpdateInput"
-            examples:
-              updatePrice:
-                summary: Change price
-                value:
-                  price: 500000
-              deactivate:
-                summary: Deactivate course
-                value:
-                  isActive: false
-              updateImage:
-                summary: Change course image
-                value:
-                  image: "664f1a2b3c4d5e6f7a8b9c0e"
-      responses:
-        "200":
-          description: Course updated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  course:
-                    $ref: "#/components/schemas/Course"
-                  code:
-                    type: string
-                    example: "courseUpdated"
-                  message:
-                    type: string
-                    example: "Kurs muvaffaqiyatli yangilandi"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          description: Course not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              example:
-                code: "courseNotFound"
-                message: "Kurs topilmadi"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
-
-    delete:
-      tags: [Courses]
-      summary: Delete a course
-      description: |
-        Permanently deletes a course by ID.
-
-        **Access:** Admin only.
-
-        > **Warning:** This does not cascade-delete related Groups or Enrollments.
-        > Consider setting `isActive: false` instead.
-      operationId: deleteCourse
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/courseId"
-      responses:
-        "200":
-          description: Course deleted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SuccessMessage"
-              example:
-                code: "courseDeleted"
-                message: "Kurs muvaffaqiyatli o'chirildi"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          description: Course not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              example:
-                code: "courseNotFound"
-                message: "Kurs topilmadi"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
-
-  # ══════════════════════════════════════════
   # GROUPS
   # ══════════════════════════════════════════
 
@@ -1386,26 +954,14 @@ paths:
         Returns a paginated list of groups.
 
         **Access rules:**
-        - `admin` — sees all groups; can filter by `course` and `isActive`
-        - `teacher` — sees only their own groups (filter by teacher is applied automatically)
+        - `admin` — sees all groups
+        - `teacher` — sees only their own groups (filter applied automatically)
       operationId: getGroups
       security:
         - BearerAuth: []
       parameters:
         - $ref: "#/components/parameters/pageParam"
         - $ref: "#/components/parameters/limitParam"
-        - name: course
-          in: query
-          description: Filter by Course ObjectId
-          schema:
-            type: string
-            example: "664f1a2b3c4d5e6f7a8b9c20"
-        - name: isActive
-          in: query
-          description: Filter by active status (admin only — teachers always see their own groups regardless)
-          schema:
-            type: boolean
-            example: true
       responses:
         "200":
           description: Groups returned
@@ -1447,11 +1003,11 @@ paths:
       tags: [Groups]
       summary: Create a group
       description: |
-        Creates a new group linked to a course and a teacher.
+        Creates a new group.
 
         **Access:** Admin only.
 
-        `name`, `course`, and `teacher` are required. `schedule`, `room`, `startDate`, `endDate` are optional.
+        `name`, `price`, and `teacher` are required. `description`, `schedule`, `room` are optional.
       operationId: createGroup
       security:
         - BearerAuth: []
@@ -1466,20 +1022,19 @@ paths:
                 summary: Minimal group
                 value:
                   name: "Python — Oqshom 1"
-                  course: "664f1a2b3c4d5e6f7a8b9c20"
+                  price: 450000
                   teacher: "664f1a2b3c4d5e6f7a8b9c0d"
               fullGroup:
                 summary: Group with full schedule
                 value:
                   name: "Python — Kunduz 2"
-                  course: "664f1a2b3c4d5e6f7a8b9c20"
+                  description: "Boshlang'ich darajadan professional darajagacha"
+                  price: 450000
                   teacher: "664f1a2b3c4d5e6f7a8b9c0d"
                   schedule:
                     days: ["Monday", "Wednesday", "Friday"]
                     time: "09:00"
                   room: "Room 3"
-                  startDate: "2024-09-01"
-                  endDate: "2024-12-01"
       responses:
         "201":
           description: Group created successfully
@@ -1505,8 +1060,8 @@ paths:
               examples:
                 missingName:
                   value: { code: "missingField", message: "Guruh nomi kiritilishi shart" }
-                missingCourse:
-                  value: { code: "missingField", message: "Kurs kiritilishi shart" }
+                missingPrice:
+                  value: { code: "missingField", message: "Narx kiritilishi shart" }
                 missingTeacher:
                   value: { code: "missingField", message: "O'qituvchi kiritilishi shart" }
         "401":
@@ -1521,7 +1076,7 @@ paths:
       tags: [Groups]
       summary: Get a group by ID
       description: |
-        Returns a single group populated with course and teacher details.
+        Returns a single group populated with teacher details.
 
         **Access rules:**
         - `admin` — can access any group
@@ -1571,7 +1126,7 @@ paths:
 
         **Access:** Admin only.
 
-        Updatable fields: `name`, `course`, `teacher`, `schedule`, `room`, `startDate`, `endDate`, `isActive`.
+        Updatable fields: `name`, `description`, `price`, `teacher`, `schedule`, `room`.
       operationId: updateGroup
       security:
         - BearerAuth: []
@@ -1588,10 +1143,6 @@ paths:
                 summary: Reassign teacher
                 value:
                   teacher: "664f1a2b3c4d5e6f7a8b9c0d"
-              deactivate:
-                summary: Deactivate a group
-                value:
-                  isActive: false
               reschedule:
                 summary: Update schedule and room
                 value:

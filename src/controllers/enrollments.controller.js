@@ -22,11 +22,8 @@ const getEnrollments = async (req, res, next) => {
         .populate({ path: "student", select: "firstName lastName phone" })
         .populate({
           path: "group",
-          select: "name course teacher",
-          populate: [
-            { path: "course", select: "name price" },
-            { path: "teacher", select: "firstName lastName" },
-          ],
+          select: "name price teacher",
+          populate: { path: "teacher", select: "firstName lastName" },
         })
         .skip(skip)
         .limit(limit)
@@ -52,10 +49,7 @@ const getEnrollment = async (req, res, next) => {
       .populate({ path: "student", select: "firstName lastName phone" })
       .populate({
         path: "group",
-        populate: [
-          { path: "course", select: "name price" },
-          { path: "teacher", select: "firstName lastName" },
-        ],
+        populate: { path: "teacher", select: "firstName lastName" },
       });
 
     if (!enrollment) {
@@ -110,7 +104,7 @@ const createEnrollment = async (req, res, next) => {
 
     const populated = await enrollment.populate([
       { path: "student", select: "firstName lastName phone" },
-      { path: "group", select: "name course" },
+      { path: "group", select: "name price" },
     ]);
 
     res.status(201).json({ enrollment: populated, code: "enrollmentCreated", message: texts.enrollmentCreated });

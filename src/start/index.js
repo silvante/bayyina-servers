@@ -10,7 +10,6 @@ const setupSwagger = require("../../docs/setup");
 
 // Register models
 require("../models/User");
-require("../models/Course");
 require("../models/Group");
 require("../models/Enrollment");
 require("../models/Payment");

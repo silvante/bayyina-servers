@@ -17,7 +17,6 @@ const connectDB = async () => {
         firstName: "Admin",
         phone: Number(ADMIN_PHONE),
         password: "admin1234",
-        isActive: true,
       });
       console.log("Admin muvaffaqiyatli yaratildi! ✅");
     }

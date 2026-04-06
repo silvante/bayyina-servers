@@ -3,11 +3,8 @@ const mongoose = require("mongoose");
 const Group = new mongoose.Schema(
   {
     name: { type: String, required: true },
-    course: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Course",
-      required: true,
-    },
+    description: { type: String },
+    price: { type: Number, required: true },
     teacher: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -18,9 +15,6 @@ const Group = new mongoose.Schema(
       time: { type: String }, // e.g. "09:00"
     },
     room: { type: String },
-    startDate: { type: Date },
-    endDate: { type: Date },
-    isActive: { type: Boolean, default: true },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

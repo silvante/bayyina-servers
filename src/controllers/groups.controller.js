@@ -8,9 +8,6 @@ const getGroups = async (req, res, next) => {
     const { page, limit, skip } = getPagination(req.query);
     const filter = {};
 
-    if (req.query.course) filter.course = req.query.course;
-    if (req.query.isActive !== undefined) filter.isActive = req.query.isActive === "true";
-
     // Teachers only see their own groups
     if (req.user.role === "teacher") {
       filter.teacher = req.user._id;
@@ -18,7 +15,6 @@ const getGroups = async (req, res, next) => {
 
     const [groups, total] = await Promise.all([
       Group.find(filter)
-        .populate("course", "name price duration")
         .populate({ path: "teacher", select: "firstName lastName phone" })
         .skip(skip)
         .limit(limit)
@@ -41,7 +37,6 @@ const getGroups = async (req, res, next) => {
 const getGroup = async (req, res, next) => {
   try {
     const group = await Group.findById(req.params.id)
-      .populate("course", "name price duration")
       .populate({ path: "teacher", select: "firstName lastName phone" });
 
     if (!group) {
@@ -61,13 +56,13 @@ const getGroup = async (req, res, next) => {
 
 // POST /groups — admin only
 const createGroup = async (req, res, next) => {
-  const { name, course, teacher, schedule, room, startDate, endDate } = req.body;
+  const { name, description, price, teacher, schedule, room } = req.body;
 
   if (!name) {
     return res.status(400).json({ code: "missingField", message: "Guruh nomi kiritilishi shart" });
   }
-  if (!course) {
-    return res.status(400).json({ code: "missingField", message: "Kurs kiritilishi shart" });
+  if (price === undefined || price === null) {
+    return res.status(400).json({ code: "missingField", message: "Narx kiritilishi shart" });
   }
   if (!teacher) {
     return res.status(400).json({ code: "missingField", message: "O'qituvchi kiritilishi shart" });
@@ -76,19 +71,15 @@ const createGroup = async (req, res, next) => {
   try {
     const group = await Group.create({
       name,
-      course,
+      description,
+      price,
       teacher,
       schedule,
       room,
-      startDate,
-      endDate,
       createdBy: req.user._id,
     });
 
-    const populated = await group.populate([
-      { path: "course", select: "name price duration" },
-      { path: "teacher", select: "firstName lastName phone" },
-    ]);
+    const populated = await group.populate({ path: "teacher", select: "firstName lastName phone" });
 
     res.status(201).json({ group: populated, code: "groupCreated", message: texts.groupCreated });
   } catch (err) {
@@ -100,11 +91,10 @@ const createGroup = async (req, res, next) => {
 const updateGroup = async (req, res, next) => {
   try {
     const updates = pickAllowedFields(req.body, [
-      "name", "course", "teacher", "schedule", "room", "startDate", "endDate", "isActive",
+      "name", "description", "price", "teacher", "schedule", "room",
     ]);
 
     const group = await Group.findByIdAndUpdate(req.params.id, updates, { new: true })
-      .populate("course", "name price duration")
       .populate({ path: "teacher", select: "firstName lastName phone" });
 
     if (!group) {
