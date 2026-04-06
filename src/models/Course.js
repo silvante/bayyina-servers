@@ -6,7 +6,6 @@ const Course = new mongoose.Schema(
     description: { type: String },
     duration: { type: Number }, // duration in months
     price: { type: Number, required: true },
-    image: { type: mongoose.Schema.Types.ObjectId, ref: "Image" },
     isActive: { type: Boolean, default: true },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

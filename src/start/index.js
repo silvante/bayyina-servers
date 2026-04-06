@@ -14,7 +14,6 @@ require("../models/Course");
 require("../models/Group");
 require("../models/Enrollment");
 require("../models/Payment");
-require("../models/Image");
 require("../models/VerificationCode");
 
 const app = express();

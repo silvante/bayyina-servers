@@ -53,10 +53,6 @@ const texts = {
   paymentNotFound: "To'lov topilmadi",
   paymentsFound: "To'lovlar ro'yxati olindi",
 
-  // Upload
-  imageUploaded: "Rasm muvaffaqiyatli yuklandi",
-  noFileProvided: "Fayl yuklanmadi",
-
   // General
   serverError: "Serverda ichki xatolik",
   tooManyRequests: "Juda ko'p so'rovlar. Iltimos, 3 daqiqadan keyin urinib ko'ring",

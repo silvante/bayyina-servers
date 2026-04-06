@@ -11,7 +11,6 @@ const getCourses = async (req, res, next) => {
 
     const [courses, total] = await Promise.all([
       Course.find(filter)
-        .populate("image")
         .populate({ path: "createdBy", select: "firstName lastName" })
         .skip(skip)
         .limit(limit)
@@ -34,7 +33,6 @@ const getCourses = async (req, res, next) => {
 const getCourse = async (req, res, next) => {
   try {
     const course = await Course.findById(req.params.id)
-      .populate("image")
       .populate({ path: "createdBy", select: "firstName lastName" });
 
     if (!course) {
@@ -49,7 +47,7 @@ const getCourse = async (req, res, next) => {
 
 // POST /courses — admin only
 const createCourse = async (req, res, next) => {
-  const { name, description, duration, price, image } = req.body;
+  const { name, description, duration, price } = req.body;
 
   if (!name) {
     return res.status(400).json({ code: "missingField", message: "Kurs nomi kiritilishi shart" });
@@ -65,7 +63,6 @@ const createCourse = async (req, res, next) => {
       description,
       duration,
       price,
-      image,
       createdBy: req.user._id,
     });
 
@@ -78,9 +75,9 @@ const createCourse = async (req, res, next) => {
 // PUT /courses/:id — admin only
 const updateCourse = async (req, res, next) => {
   try {
-    const updates = pickAllowedFields(req.body, ["name", "description", "duration", "price", "image", "isActive"]);
+    const updates = pickAllowedFields(req.body, ["name", "description", "duration", "price", "isActive"]);
 
-    const course = await Course.findByIdAndUpdate(req.params.id, updates, { new: true }).populate("image");
+    const course = await Course.findByIdAndUpdate(req.params.id, updates, { new: true });
 
     if (!course) {
       return res.status(404).json({ code: "courseNotFound", message: texts.courseNotFound });
