@@ -18,8 +18,6 @@ const Enrollment = new mongoose.Schema(
       enum: ["active", "completed", "dropped"],
     },
     enrolledAt: { type: Date, default: Date.now },
-    courseType: { type: String },
-    startDate: { type: Date },
     monthlyFee: { type: Number },
     discount: { type: Number, default: 0 },
     discountReason: { type: String },
