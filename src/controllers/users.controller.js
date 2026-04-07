@@ -1,5 +1,10 @@
 const texts = require("../data/texts");
-const { pickAllowedFields, getPagination, buildPaginationMeta, isValidPhone } = require("../utils/helpers");
+const {
+  pickAllowedFields,
+  getPagination,
+  buildPaginationMeta,
+  isValidPhone,
+} = require("../utils/helpers");
 const User = require("../models/User");
 const Group = require("../models/Group");
 const Enrollment = require("../models/Enrollment");
@@ -22,7 +27,11 @@ const getUsers = async (req, res, next) => {
     }
 
     const [users, total] = await Promise.all([
-      User.find(filter).select("-password").skip(skip).limit(limit).sort({ createdAt: -1 }),
+      User.find(filter)
+        .select("-password")
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 }),
       User.countDocuments(filter),
     ]);
 
@@ -42,7 +51,9 @@ const getUser = async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id).select("-password");
     if (!user) {
-      return res.status(404).json({ code: "userNotFound", message: texts.userNotFound });
+      return res
+        .status(404)
+        .json({ code: "userNotFound", message: texts.userNotFound });
     }
     res.json({ user, code: "usersFound", message: texts.usersFound });
   } catch (err) {
@@ -52,56 +63,98 @@ const getUser = async (req, res, next) => {
 
 // POST /users — admin creates teacher or student
 const createUser = async (req, res, next) => {
-  const { firstName, lastName, phone, password, role, groupIds, groupId, telegramId, gender, age, source } = req.body;
+  const {
+    firstName,
+    lastName,
+    phone,
+    password,
+    role,
+    groupIds,
+    groupId,
+    telegramId,
+    gender,
+    age,
+    source,
+  } = req.body;
 
   if (!firstName || !lastName) {
-    return res.status(400).json({ code: "missingField", message: "Ism va Familiya kiritilishi shart" });
+    return res
+      .status(400)
+      .json({
+        code: "missingField",
+        message: "Ism va Familiya kiritilishi shart",
+      });
   }
 
   if (!isValidPhone(phone)) {
-    return res.status(400).json({ code: "invalidPhone", message: texts.invalidPhone });
+    return res
+      .status(400)
+      .json({ code: "invalidPhone", message: texts.invalidPhone });
   }
 
   if (String(password)?.length < 6) {
-    return res.status(400).json({ code: "invalidPassword", message: texts.invalidPassword });
+    return res
+      .status(400)
+      .json({ code: "invalidPassword", message: texts.invalidPassword });
   }
 
   const effectiveRole = role || "student";
   const allowedRoles = ["teacher", "student"];
   if (!allowedRoles.includes(effectiveRole)) {
-    return res.status(400).json({ code: "roleNotAllowed", message: "Ushbu rolga ruxsat berilmaydi" });
+    return res
+      .status(400)
+      .json({
+        code: "roleNotAllowed",
+        message: "Ushbu rolga ruxsat berilmaydi",
+      });
   }
 
-  if (effectiveRole === "teacher") {
-    if (!groupIds || !Array.isArray(groupIds) || groupIds.length === 0) {
-      return res.status(400).json({ code: "missingField", message: "O'qituvchi kamida bitta guruhga biriktirilishi shart (groupIds)" });
-    }
-  }
+  // they should be uptional
 
-  if (effectiveRole === "student") {
-    if (!groupId) {
-      return res.status(400).json({ code: "missingField", message: "Talaba bitta guruhga biriktirilishi shart (groupId)" });
-    }
-  }
+  // if (effectiveRole === "teacher") {
+  //   if (!groupIds || !Array.isArray(groupIds) || groupIds.length === 0) {
+  //     return res.status(400).json({ code: "missingField", message: "O'qituvchi kamida bitta guruhga biriktirilishi shart (groupIds)" });
+  //   }
+  // }
+
+  // if (effectiveRole === "student") {
+  //   if (!groupId) {
+  //     return res.status(400).json({ code: "missingField", message: "Talaba bitta guruhga biriktirilishi shart (groupId)" });
+  //   }
+  // }
 
   try {
     const existing = await User.findOne({ phone: Number(phone) });
     if (existing) {
-      return res.status(400).json({ code: "phoneAlreadyUsed", message: texts.phoneAlreadyUsed });
+      return res
+        .status(400)
+        .json({ code: "phoneAlreadyUsed", message: texts.phoneAlreadyUsed });
     }
 
     // Validate groups exist before creating the user
-    if (effectiveRole === "teacher") {
+    if (
+      effectiveRole === "teacher" &&
+      groupIds &&
+      Array.isArray(groupIds) &&
+      groupIds.length !== 0
+    ) {
       const foundGroups = await Group.find({ _id: { $in: groupIds } });
       if (foundGroups.length !== groupIds.length) {
-        return res.status(400).json({ code: "groupNotFound", message: "Bir yoki bir nechta guruh topilmadi" });
+        return res
+          .status(400)
+          .json({
+            code: "groupNotFound",
+            message: "Bir yoki bir nechta guruh topilmadi",
+          });
       }
     }
 
-    if (effectiveRole === "student") {
+    if (effectiveRole === "student" && groupId) {
       const group = await Group.findById(groupId);
       if (!group) {
-        return res.status(400).json({ code: "groupNotFound", message: "Guruh topilmadi" });
+        return res
+          .status(400)
+          .json({ code: "groupNotFound", message: "Guruh topilmadi" });
       }
     }
 
@@ -127,7 +180,9 @@ const createUser = async (req, res, next) => {
     const userObj = user.toObject();
     delete userObj.password;
 
-    res.status(201).json({ user: userObj, code: "userCreated", message: texts.userCreated });
+    res
+      .status(201)
+      .json({ user: userObj, code: "userCreated", message: texts.userCreated });
   } catch (err) {
     next(err);
   }
@@ -139,20 +194,35 @@ const updateUser = async (req, res, next) => {
     const targetId = req.params.id;
 
     // Students can only update themselves
-    if (req.user.role === "student" && String(req.user._id) !== String(targetId)) {
-      return res.status(403).json({ code: "forbidden", message: texts.forbidden });
+    if (
+      req.user.role === "student" &&
+      String(req.user._id) !== String(targetId)
+    ) {
+      return res
+        .status(403)
+        .json({ code: "forbidden", message: texts.forbidden });
     }
 
-    const allowed = ["firstName", "lastName", "telegramId", "gender", "age", "source"];
+    const allowed = [
+      "firstName",
+      "lastName",
+      "telegramId",
+      "gender",
+      "age",
+      "source",
+    ];
     if (req.user.role === "admin") allowed.push("role", "password");
 
     const updates = pickAllowedFields(req.body, allowed);
 
-    const user = await User.findByIdAndUpdate(targetId, updates, { new: true })
-      .select("-password");
+    const user = await User.findByIdAndUpdate(targetId, updates, {
+      new: true,
+    }).select("-password");
 
     if (!user) {
-      return res.status(404).json({ code: "userNotFound", message: texts.userNotFound });
+      return res
+        .status(404)
+        .json({ code: "userNotFound", message: texts.userNotFound });
     }
 
     res.json({ user, code: "userUpdated", message: texts.userUpdated });
@@ -166,7 +236,9 @@ const deleteUser = async (req, res, next) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
     if (!user) {
-      return res.status(404).json({ code: "userNotFound", message: texts.userNotFound });
+      return res
+        .status(404)
+        .json({ code: "userNotFound", message: texts.userNotFound });
     }
     res.json({ code: "userDeleted", message: texts.userDeleted });
   } catch (err) {

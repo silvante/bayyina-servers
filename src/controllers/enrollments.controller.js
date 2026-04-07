@@ -71,7 +71,7 @@ const getEnrollment = async (req, res, next) => {
 const createEnrollment = async (req, res, next) => {
   const {
     student, group,
-    startDate, monthlyFee, discount, discountReason,
+    monthlyFee, discount, discountReason,
     paymentDay, lastPaymentDate, nextPaymentDate, debt, balance,
   } = req.body;
 
@@ -90,7 +90,6 @@ const createEnrollment = async (req, res, next) => {
 
     const enrollment = await Enrollment.create({
       student, group,
-      ...(startDate && { startDate: new Date(startDate) }),
       ...(monthlyFee != null && { monthlyFee }),
       ...(discount != null && { discount }),
       ...(discountReason && { discountReason }),
@@ -115,7 +114,7 @@ const createEnrollment = async (req, res, next) => {
 // PUT /enrollments/:id — update status and financial fields
 const updateEnrollment = async (req, res, next) => {
   try {
-    const { status, startDate, monthlyFee, discount, discountReason, paymentDay, lastPaymentDate, nextPaymentDate, debt, balance } = req.body;
+    const { status, monthlyFee, discount, discountReason, paymentDay, lastPaymentDate, nextPaymentDate, debt, balance } = req.body;
     const allowedStatuses = ["active", "completed", "dropped"];
 
     const updates = {};
@@ -127,7 +126,6 @@ const updateEnrollment = async (req, res, next) => {
       updates.status = status;
     }
 
-    if (startDate !== undefined) updates.startDate = new Date(startDate);
     if (monthlyFee !== undefined) updates.monthlyFee = monthlyFee;
     if (discount !== undefined) updates.discount = discount;
     if (discountReason !== undefined) updates.discountReason = discountReason;
