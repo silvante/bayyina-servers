@@ -246,4 +246,54 @@ const deleteUser = async (req, res, next) => {
   }
 };
 
-module.exports = { getUsers, getUser, createUser, updateUser, deleteUser };
+// GET /users/teachers — admin only
+const getTeachers = async (req, res, next) => {
+  try {
+    const { page, limit, skip } = getPagination(req.query);
+
+    const [users, total] = await Promise.all([
+      User.find({ role: "teacher" })
+        .select("-password")
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 }),
+      User.countDocuments({ role: "teacher" }),
+    ]);
+
+    res.json({
+      users,
+      ...buildPaginationMeta(total, page, limit),
+      code: "usersFound",
+      message: texts.usersFound,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /users/students — admin only
+const getStudents = async (req, res, next) => {
+  try {
+    const { page, limit, skip } = getPagination(req.query);
+
+    const [users, total] = await Promise.all([
+      User.find({ role: "student" })
+        .select("-password")
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 }),
+      User.countDocuments({ role: "student" }),
+    ]);
+
+    res.json({
+      users,
+      ...buildPaginationMeta(total, page, limit),
+      code: "usersFound",
+      message: texts.usersFound,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getUsers, getUser, createUser, updateUser, deleteUser, getTeachers, getStudents };
