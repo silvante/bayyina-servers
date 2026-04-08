@@ -44,6 +44,8 @@ tags:
     description: User management (admin creates/manages teachers and students)
   - name: Groups
     description: Group management — each group defines a course name, price, teacher, and schedule
+  - name: Enrollments
+    description: Enrollment management — link students to groups and track per-student financial details (fee, discount, debt, balance)
 
 # ─────────────────────────────────────────────
 # Security scheme
@@ -320,6 +322,194 @@ components:
           type: string
           example: "Room 5"
 
+    # ── Enrollment ──────────────────────────────
+    Enrollment:
+      type: object
+      description: A record that links a student to a group and tracks their payment details
+      properties:
+        _id:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c20"
+        student:
+          type: object
+          description: Populated student (firstName, lastName, phone)
+          properties:
+            _id:
+              type: string
+              example: "664f1a2b3c4d5e6f7a8b9c0d"
+            firstName:
+              type: string
+              example: "Jasur"
+            lastName:
+              type: string
+              example: "Toshmatov"
+            phone:
+              type: integer
+              example: 998901234567
+        group:
+          type: object
+          description: Populated group (name, price, teacher)
+          properties:
+            _id:
+              type: string
+              example: "664f1a2b3c4d5e6f7a8b9c10"
+            name:
+              type: string
+              example: "Python — Oqshom 1"
+            price:
+              type: number
+              example: 450000
+            teacher:
+              type: object
+              properties:
+                _id:
+                  type: string
+                  example: "664f1a2b3c4d5e6f7a8b9c0f"
+                firstName:
+                  type: string
+                  example: "Sarvinoz"
+                lastName:
+                  type: string
+                  example: "Yusupova"
+        status:
+          type: string
+          enum: [active, completed, dropped]
+          default: active
+          example: "active"
+        enrolledAt:
+          type: string
+          format: date-time
+          example: "2024-06-01T10:00:00.000Z"
+        monthlyFee:
+          type: number
+          description: Per-student monthly fee (may differ from the group's default price)
+          example: 400000
+        discount:
+          type: number
+          default: 0
+          description: Discount amount applied to the monthly fee
+          example: 50000
+        discountReason:
+          type: string
+          nullable: true
+          example: "Sibling discount"
+        paymentDay:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: Day of the month the payment is due
+          example: 5
+        lastPaymentDate:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-06-05T00:00:00.000Z"
+        nextPaymentDate:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-07-05T00:00:00.000Z"
+        debt:
+          type: number
+          default: 0
+          description: Outstanding debt amount in UZS
+          example: 0
+        balance:
+          type: number
+          default: 0
+          description: Prepaid/positive balance in UZS
+          example: 100000
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-06-01T10:00:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-06-10T08:30:00.000Z"
+
+    EnrollmentInput:
+      type: object
+      required: [student, group]
+      properties:
+        student:
+          type: string
+          description: MongoDB ObjectId of the student (User)
+          example: "664f1a2b3c4d5e6f7a8b9c0d"
+        group:
+          type: string
+          description: MongoDB ObjectId of the group
+          example: "664f1a2b3c4d5e6f7a8b9c10"
+        monthlyFee:
+          type: number
+          description: Override monthly fee for this student (defaults to group price if omitted)
+          example: 400000
+        discount:
+          type: number
+          description: Discount amount in UZS
+          example: 50000
+        discountReason:
+          type: string
+          example: "Sibling discount"
+        paymentDay:
+          type: integer
+          minimum: 1
+          maximum: 31
+          example: 5
+        lastPaymentDate:
+          type: string
+          format: date
+          example: "2024-06-05"
+        nextPaymentDate:
+          type: string
+          format: date
+          example: "2024-07-05"
+        debt:
+          type: number
+          default: 0
+          example: 0
+        balance:
+          type: number
+          default: 0
+          example: 0
+
+    EnrollmentUpdateInput:
+      type: object
+      description: All fields are optional. Partial update — only provided fields are changed.
+      properties:
+        status:
+          type: string
+          enum: [active, completed, dropped]
+          example: "completed"
+        monthlyFee:
+          type: number
+          example: 420000
+        discount:
+          type: number
+          example: 30000
+        discountReason:
+          type: string
+          example: "Loyalty discount"
+        paymentDay:
+          type: integer
+          minimum: 1
+          maximum: 31
+          example: 10
+        lastPaymentDate:
+          type: string
+          format: date
+          example: "2024-07-05"
+        nextPaymentDate:
+          type: string
+          format: date
+          example: "2024-08-05"
+        debt:
+          type: number
+          example: 50000
+        balance:
+          type: number
+          example: 0
+
     # ── Pagination ───────────────────────────────
     PaginationMeta:
       type: object
@@ -413,6 +603,15 @@ components:
       schema:
         type: string
         example: "664f1a2b3c4d5e6f7a8b9c10"
+
+    enrollmentId:
+      name: id
+      in: path
+      required: true
+      description: MongoDB ObjectId of the enrollment
+      schema:
+        type: string
+        example: "664f1a2b3c4d5e6f7a8b9c20"
 
     pageParam:
       name: page
@@ -1358,5 +1557,330 @@ paths:
               example:
                 code: "groupNotFound"
                 message: "Guruh topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ══════════════════════════════════════════
+  # ENROLLMENTS
+  # ══════════════════════════════════════════
+
+  /enrollments:
+    get:
+      tags: [Enrollments]
+      summary: List enrollments
+      description: |
+        Returns a paginated, filterable list of enrollments populated with student and group details.
+
+        **Access rules:**
+        - `admin` / `teacher` — can list all enrollments; supports filtering by `group`, `student`, and `status`
+        - `student` — always sees only their own enrollments (any `student` query param is ignored)
+      operationId: getEnrollments
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/pageParam"
+        - $ref: "#/components/parameters/limitParam"
+        - name: group
+          in: query
+          description: Filter by group ObjectId
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c10"
+        - name: student
+          in: query
+          description: Filter by student ObjectId (admin/teacher only; ignored for student role)
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c0d"
+        - name: status
+          in: query
+          description: Filter by enrollment status
+          schema:
+            type: string
+            enum: [active, completed, dropped]
+            example: "active"
+      responses:
+        "200":
+          description: Enrollments returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enrollments:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Enrollment"
+                  total:
+                    type: integer
+                    example: 24
+                  page:
+                    type: integer
+                    example: 1
+                  limit:
+                    type: integer
+                    example: 10
+                  totalPages:
+                    type: integer
+                    example: 3
+                  code:
+                    type: string
+                    example: "enrollmentsFound"
+                  message:
+                    type: string
+                    example: "Yozilishlar ro'yxati olindi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    post:
+      tags: [Enrollments]
+      summary: Create an enrollment
+      description: |
+        Enrolls a student into a group.
+
+        **Access:** Admin, Teacher.
+
+        Prevents duplicate active enrollments — if the student already has an `active` enrollment
+        in the same group, the request is rejected with `alreadyEnrolled`.
+
+        `monthlyFee`, `discount`, `discountReason`, `paymentDay`, `lastPaymentDate`,
+        `nextPaymentDate`, `debt`, and `balance` are all optional financial fields.
+      operationId: createEnrollment
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnrollmentInput"
+            examples:
+              minimal:
+                summary: Minimal enrollment (student + group only)
+                value:
+                  student: "664f1a2b3c4d5e6f7a8b9c0d"
+                  group: "664f1a2b3c4d5e6f7a8b9c10"
+              withFinancials:
+                summary: Enrollment with custom fee and payment schedule
+                value:
+                  student: "664f1a2b3c4d5e6f7a8b9c0d"
+                  group: "664f1a2b3c4d5e6f7a8b9c10"
+                  monthlyFee: 400000
+                  discount: 50000
+                  discountReason: "Sibling discount"
+                  paymentDay: 5
+                  nextPaymentDate: "2024-07-05"
+      responses:
+        "201":
+          description: Enrollment created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enrollment:
+                    $ref: "#/components/schemas/Enrollment"
+                  code:
+                    type: string
+                    example: "enrollmentCreated"
+                  message:
+                    type: string
+                    example: "O'quvchi guruhga yozildi"
+        "400":
+          description: Validation error or duplicate enrollment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missingStudent:
+                  value: { code: "missingField", message: "O'quvchi kiritilishi shart" }
+                missingGroup:
+                  value: { code: "missingField", message: "Guruh kiritilishi shart" }
+                alreadyEnrolled:
+                  value: { code: "alreadyEnrolled", message: "O'quvchi bu guruhda allaqachon faol" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /enrollments/{id}:
+    get:
+      tags: [Enrollments]
+      summary: Get an enrollment by ID
+      description: |
+        Returns a single enrollment fully populated with student and group (including teacher) details.
+
+        **Access rules:**
+        - `admin` / `teacher` — can fetch any enrollment
+        - `student` — can only fetch their own enrollment; returns `403` if the enrollment belongs to another student
+      operationId: getEnrollment
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/enrollmentId"
+      responses:
+        "200":
+          description: Enrollment found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enrollment:
+                    $ref: "#/components/schemas/Enrollment"
+                  code:
+                    type: string
+                    example: "enrollmentsFound"
+                  message:
+                    type: string
+                    example: "Yozilish topildi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Student trying to access another student's enrollment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "forbidden"
+                message: "Ruxsat berilmadi"
+        "404":
+          description: Enrollment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "enrollmentNotFound"
+                message: "Yozilish topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    put:
+      tags: [Enrollments]
+      summary: Update an enrollment
+      description: |
+        Updates an enrollment's status and/or financial fields. All fields are optional — only
+        provided fields are changed.
+
+        **Access:** Admin, Teacher.
+
+        **Allowed status transitions:**
+        - `active` → `completed` (student finished the course)
+        - `active` → `dropped` (student left early)
+        - Any status → `active` (re-activate)
+      operationId: updateEnrollment
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/enrollmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnrollmentUpdateInput"
+            examples:
+              dropStudent:
+                summary: Mark student as dropped
+                value:
+                  status: "dropped"
+              updateFeeAndDebt:
+                summary: Update monthly fee and clear debt
+                value:
+                  monthlyFee: 420000
+                  debt: 0
+                  balance: 50000
+              recordPayment:
+                summary: Record a payment cycle
+                value:
+                  lastPaymentDate: "2024-07-05"
+                  nextPaymentDate: "2024-08-05"
+                  debt: 0
+      responses:
+        "200":
+          description: Enrollment updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enrollment:
+                    $ref: "#/components/schemas/Enrollment"
+                  code:
+                    type: string
+                    example: "enrollmentUpdated"
+                  message:
+                    type: string
+                    example: "Yozilish yangilandi"
+        "400":
+          description: Invalid status value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "invalidStatus"
+                message: "Status noto'g'ri"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Enrollment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "enrollmentNotFound"
+                message: "Yozilish topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    delete:
+      tags: [Enrollments]
+      summary: Delete an enrollment
+      description: |
+        Permanently deletes an enrollment record by ID.
+
+        **Access:** Admin only.
+
+        > **Warning:** This permanently removes the enrollment and its payment history link.
+        > Consider updating the status to `dropped` instead of deleting.
+      operationId: deleteEnrollment
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/enrollmentId"
+      responses:
+        "200":
+          description: Enrollment deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+              example:
+                code: "enrollmentDeleted"
+                message: "Yozilish o'chirildi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Enrollment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "enrollmentNotFound"
+                message: "Yozilish topilmadi"
         "429":
           $ref: "#/components/responses/TooManyRequests"
