@@ -46,6 +46,8 @@ tags:
     description: Group management — each group defines a course name, price, teacher, and schedule
   - name: Enrollments
     description: Enrollment management — link students to groups and track per-student financial details (fee, discount, debt, balance)
+  - name: Payments
+    description: Payment management — record and track monthly payments for enrolled students
 
 # ─────────────────────────────────────────────
 # Security scheme
@@ -510,6 +512,135 @@ components:
           type: number
           example: 0
 
+    # ── Payment ──────────────────────────────────
+    Payment:
+      type: object
+      description: A payment record for a student's monthly fee
+      properties:
+        _id:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c30"
+        enrollment:
+          type: object
+          description: Populated enrollment (group, status)
+          properties:
+            _id:
+              type: string
+              example: "664f1a2b3c4d5e6f7a8b9c20"
+            group:
+              type: string
+              example: "664f1a2b3c4d5e6f7a8b9c10"
+            status:
+              type: string
+              enum: [active, completed, dropped]
+              example: "active"
+        student:
+          type: object
+          description: Populated student (firstName, lastName, phone)
+          properties:
+            _id:
+              type: string
+              example: "664f1a2b3c4d5e6f7a8b9c0d"
+            firstName:
+              type: string
+              example: "Jasur"
+            lastName:
+              type: string
+              example: "Toshmatov"
+            phone:
+              type: integer
+              example: 998901234567
+        amount:
+          type: number
+          description: Payment amount in UZS
+          example: 450000
+        month:
+          type: string
+          format: date-time
+          description: The month this payment covers
+          example: "2024-06-01T00:00:00.000Z"
+        status:
+          type: string
+          enum: [paid, pending, overdue]
+          default: pending
+          example: "paid"
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-06-05T10:00:00.000Z"
+        note:
+          type: string
+          nullable: true
+          example: "Naqd to'landi"
+        createdBy:
+          type: object
+          description: Populated user who recorded the payment
+          properties:
+            _id:
+              type: string
+              example: "664f1a2b3c4d5e6f7a8b9c0f"
+            firstName:
+              type: string
+              example: "Sarvinoz"
+            lastName:
+              type: string
+              example: "Yusupova"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-06-05T10:00:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-06-05T10:00:00.000Z"
+
+    PaymentInput:
+      type: object
+      required: [enrollment, student, amount, month]
+      properties:
+        enrollment:
+          type: string
+          description: MongoDB ObjectId of the enrollment
+          example: "664f1a2b3c4d5e6f7a8b9c20"
+        student:
+          type: string
+          description: MongoDB ObjectId of the student (User)
+          example: "664f1a2b3c4d5e6f7a8b9c0d"
+        amount:
+          type: number
+          description: Payment amount in UZS (must be > 0)
+          example: 450000
+        month:
+          type: string
+          format: date
+          description: The month this payment covers (ISO date string)
+          example: "2024-06-01"
+        note:
+          type: string
+          description: Optional note about the payment
+          example: "Naqd to'landi"
+
+    PaymentUpdateInput:
+      type: object
+      description: All fields are optional. Only `status`, `amount`, `note`, and `paidAt` can be updated.
+      properties:
+        status:
+          type: string
+          enum: [paid, pending, overdue]
+          example: "paid"
+        amount:
+          type: number
+          example: 450000
+        note:
+          type: string
+          example: "Yangilangan izoh"
+        paidAt:
+          type: string
+          format: date-time
+          description: If status is set to `paid` and paidAt is omitted, it defaults to now
+          example: "2024-06-10T09:00:00.000Z"
+
     # ── Pagination ───────────────────────────────
     PaginationMeta:
       type: object
@@ -612,6 +743,15 @@ components:
       schema:
         type: string
         example: "664f1a2b3c4d5e6f7a8b9c20"
+
+    paymentId:
+      name: id
+      in: path
+      required: true
+      description: MongoDB ObjectId of the payment
+      schema:
+        type: string
+        example: "664f1a2b3c4d5e6f7a8b9c30"
 
     pageParam:
       name: page
@@ -1882,5 +2022,261 @@ paths:
               example:
                 code: "enrollmentNotFound"
                 message: "Yozilish topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ══════════════════════════════════════════
+  # PAYMENTS
+  # ══════════════════════════════════════════
+
+  /payments:
+    get:
+      tags: [Payments]
+      summary: List payments
+      description: |
+        Returns a paginated list of payment records.
+
+        **Access:**
+        - `admin` / `teacher` — can filter by `student`, `enrollment`, or `status`
+        - `student` — automatically scoped to their own payments only
+
+        Sorted by `month` descending (most recent first).
+      operationId: getPayments
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/pageParam"
+        - $ref: "#/components/parameters/limitParam"
+        - name: enrollment
+          in: query
+          schema:
+            type: string
+          description: Filter by enrollment ObjectId
+          example: "664f1a2b3c4d5e6f7a8b9c20"
+        - name: student
+          in: query
+          schema:
+            type: string
+          description: Filter by student ObjectId (admin/teacher only; students are auto-scoped)
+          example: "664f1a2b3c4d5e6f7a8b9c0d"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [paid, pending, overdue]
+          description: Filter by payment status
+          example: "paid"
+      responses:
+        "200":
+          description: Payments returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  payments:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Payment"
+                  total:
+                    type: integer
+                    example: 30
+                  page:
+                    type: integer
+                    example: 1
+                  limit:
+                    type: integer
+                    example: 10
+                  totalPages:
+                    type: integer
+                    example: 3
+                  hasNextPage:
+                    type: boolean
+                    example: true
+                  hasPrevPage:
+                    type: boolean
+                    example: false
+                  code:
+                    type: string
+                    example: "paymentsFound"
+                  message:
+                    type: string
+                    example: "To'lovlar ro'yxati olindi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    post:
+      tags: [Payments]
+      summary: Record a payment
+      description: |
+        Creates a new payment record. Status is automatically set to `paid` and `paidAt` is set to the current time.
+
+        **Access:** Admin, Teacher.
+      operationId: createPayment
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInput"
+            example:
+              enrollment: "664f1a2b3c4d5e6f7a8b9c20"
+              student: "664f1a2b3c4d5e6f7a8b9c0d"
+              amount: 450000
+              month: "2024-06-01"
+              note: "Naqd to'landi"
+      responses:
+        "201":
+          description: Payment created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  payment:
+                    $ref: "#/components/schemas/Payment"
+                  code:
+                    type: string
+                    example: "paymentCreated"
+                  message:
+                    type: string
+                    example: "To'lov qabul qilindi"
+        "400":
+          description: Missing or invalid fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missingEnrollment:
+                  value: { code: "missingField", message: "Ro'yxatga olish kiritilishi shart" }
+                missingStudent:
+                  value: { code: "missingField", message: "O'quvchi kiritilishi shart" }
+                missingAmount:
+                  value: { code: "missingField", message: "To'lov miqdori kiritilishi shart" }
+                missingMonth:
+                  value: { code: "missingField", message: "Oy kiritilishi shart" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /payments/{id}:
+    get:
+      tags: [Payments]
+      summary: Get a single payment
+      description: |
+        Returns a single payment record by ID.
+
+        **Access:**
+        - `admin` / `teacher` — can retrieve any payment
+        - `student` — can only retrieve their own payments (returns `403` otherwise)
+      operationId: getPayment
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/paymentId"
+      responses:
+        "200":
+          description: Payment returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  payment:
+                    $ref: "#/components/schemas/Payment"
+                  code:
+                    type: string
+                    example: "paymentsFound"
+                  message:
+                    type: string
+                    example: "To'lov topildi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Payment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "paymentNotFound"
+                message: "To'lov topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    put:
+      tags: [Payments]
+      summary: Update a payment
+      description: |
+        Updates an existing payment. Only `status`, `amount`, `note`, and `paidAt` can be changed.
+
+        If `status` is set to `paid` and `paidAt` is not provided, `paidAt` is automatically set to the current time.
+
+        **Access:** Admin, Teacher.
+      operationId: updatePayment
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/paymentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentUpdateInput"
+            examples:
+              markPaid:
+                summary: Mark payment as paid
+                value:
+                  status: "paid"
+              markOverdue:
+                summary: Mark payment as overdue
+                value:
+                  status: "overdue"
+                  note: "Muddati o'tdi"
+              updateAmount:
+                summary: Correct the payment amount
+                value:
+                  amount: 500000
+                  note: "Miqdor to'g'irlandi"
+      responses:
+        "200":
+          description: Payment updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  payment:
+                    $ref: "#/components/schemas/Payment"
+                  code:
+                    type: string
+                    example: "paymentUpdated"
+                  message:
+                    type: string
+                    example: "To'lov yangilandi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Payment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "paymentNotFound"
+                message: "To'lov topilmadi"
         "429":
           $ref: "#/components/responses/TooManyRequests"
