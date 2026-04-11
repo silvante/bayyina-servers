@@ -67,6 +67,17 @@ const createGroup = async (req, res, next) => {
   if (!teacher) {
     return res.status(400).json({ code: "missingField", message: "O'qituvchi kiritilishi shart" });
   }
+  if (!schedule) {
+    return res.status(400).json({ code: "missingField", message: "Dars jadvali kiritilishi shart" });
+  }
+  if (!schedule.time) {
+    return res.status(400).json({ code: "missingField", message: "Dars vaqti kiritilishi shart" });
+  }
+
+  const validDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  if (schedule.days && schedule.days.some((d) => !validDays.includes(d))) {
+    return res.status(400).json({ code: "invalidField", message: "Noto'g'ri kun kiritildi. Faqat haftaning kunlari qabul qilinadi" });
+  }
 
   try {
     const group = await Group.create({

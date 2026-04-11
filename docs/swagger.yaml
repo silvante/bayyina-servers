@@ -234,11 +234,13 @@ components:
               example: 998997654321
         schedule:
           type: object
+          required: [time]
           properties:
             days:
               type: array
               items:
                 type: string
+                enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
               example: ["Monday", "Wednesday", "Friday"]
             time:
               type: string
@@ -262,7 +264,7 @@ components:
 
     GroupInput:
       type: object
-      required: [name, price, teacher]
+      required: [name, price, teacher, schedule]
       properties:
         name:
           type: string
@@ -280,11 +282,13 @@ components:
           example: "664f1a2b3c4d5e6f7a8b9c0d"
         schedule:
           type: object
+          required: [time]
           properties:
             days:
               type: array
               items:
                 type: string
+                enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
               example: ["Monday", "Wednesday", "Friday"]
             time:
               type: string
@@ -316,6 +320,7 @@ components:
               type: array
               items:
                 type: string
+                enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
               example: ["Tuesday", "Thursday"]
             time:
               type: string
@@ -1484,7 +1489,7 @@ paths:
 
         **Access:** Admin only.
 
-        `name`, `price`, and `teacher` are required. `description`, `schedule`, `room` are optional.
+        `name`, `price`, `teacher`, and `schedule` (with `time`) are required. `description`, `schedule.days`, and `room` are optional.
       operationId: createGroup
       security:
         - BearerAuth: []
@@ -1501,6 +1506,8 @@ paths:
                   name: "Python — Oqshom 1"
                   price: 450000
                   teacher: "664f1a2b3c4d5e6f7a8b9c0d"
+                  schedule:
+                    time: "09:00"
               fullGroup:
                 summary: Group with full schedule
                 value:
@@ -1541,6 +1548,12 @@ paths:
                   value: { code: "missingField", message: "Narx kiritilishi shart" }
                 missingTeacher:
                   value: { code: "missingField", message: "O'qituvchi kiritilishi shart" }
+                missingSchedule:
+                  value: { code: "missingField", message: "Dars jadvali kiritilishi shart" }
+                missingTime:
+                  value: { code: "missingField", message: "Dars vaqti kiritilishi shart" }
+                invalidDay:
+                  value: { code: "invalidField", message: "Noto'g'ri kun kiritildi. Faqat haftaning kunlari qabul qilinadi" }
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":

@@ -11,8 +11,24 @@ const Group = new mongoose.Schema(
       required: true,
     },
     schedule: {
-      days: [{ type: String }], // e.g. ["Monday", "Wednesday", "Friday"]
-      time: { type: String }, // e.g. "09:00"
+      type: {
+        days: [
+          {
+            type: String,
+            enum: [
+              "Monday",
+              "Tuesday",
+              "Wednesday",
+              "Thursday",
+              "Friday",
+              "Saturday",
+              "Sunday",
+            ],
+          },
+        ],
+        time: { type: String, required: true },
+      },
+      required: true,
     },
     room: { type: String },
     createdBy: {
