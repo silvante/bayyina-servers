@@ -190,6 +190,13 @@ const createUser = async (req, res, next) => {
     const userObj = user.toObject();
     delete userObj.password;
 
+    if (effectiveRole === "student") {
+      const enrollments = await Enrollment.find({ student: user._id })
+        .select("-student -__v")
+        .populate("group", "name description price schedule room");
+      userObj.enrollments = enrollments;
+    }
+
     res
       .status(201)
       .json({ user: userObj, code: "userCreated", message: texts.userCreated });
