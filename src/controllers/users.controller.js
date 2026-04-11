@@ -70,7 +70,6 @@ const createUser = async (req, res, next) => {
     password,
     role,
     groupIds,
-    groupId,
     telegramId,
     gender,
     age,
@@ -149,12 +148,17 @@ const createUser = async (req, res, next) => {
       }
     }
 
-    if (effectiveRole === "student" && groupId) {
-      const group = await Group.findById(groupId);
-      if (!group) {
+    if (
+      effectiveRole === "student" &&
+      groupIds &&
+      Array.isArray(groupIds) &&
+      groupIds.length !== 0
+    ) {
+      const foundGroups = await Group.find({ _id: { $in: groupIds } });
+      if (foundGroups.length !== groupIds.length) {
         return res
           .status(400)
-          .json({ code: "groupNotFound", message: "Guruh topilmadi" });
+          .json({ code: "groupNotFound", message: "Bir yoki bir nechta guruh topilmadi" });
       }
     }
 
@@ -172,9 +176,15 @@ const createUser = async (req, res, next) => {
 
     // Attach to groups
     if (effectiveRole === "teacher") {
-      await Group.updateMany({ _id: { $in: groupIds } }, { teacher: user._id });
+      if (groupIds && Array.isArray(groupIds) && groupIds.length > 0) {
+        await Group.updateMany({ _id: { $in: groupIds } }, { teacher: user._id });
+      }
     } else {
-      await Enrollment.create({ student: user._id, group: groupId });
+      if (groupIds && Array.isArray(groupIds) && groupIds.length > 0) {
+        await Enrollment.insertMany(
+          groupIds.map((gid) => ({ student: user._id, group: gid }))
+        );
+      }
     }
 
     const userObj = user.toObject();

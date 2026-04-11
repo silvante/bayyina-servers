@@ -150,13 +150,11 @@ components:
         source:
           type: string
           example: "Instagram"
-        groupId:
-          type: string
-          description: Required when role is `student`
-          example: "664f1a2b3c4d5e6f7a8b9c01"
         groupIds:
           type: array
-          description: Required when role is `teacher` — list of group IDs to assign
+          description: >
+            List of group IDs. For `teacher` — the teacher is assigned to those groups.
+            For `student` — an Enrollment is created for each group.
           items:
             type: string
           example: ["664f1a2b3c4d5e6f7a8b9c01", "664f1a2b3c4d5e6f7a8b9c02"]
@@ -1192,8 +1190,8 @@ paths:
         **Access:** Admin only.
 
         **Role-specific requirements:**
-        - `student` — must provide `groupId` (single group); an Enrollment is automatically created.
-        - `teacher` — must provide `groupIds` (array); the teacher is assigned to those groups.
+        - `student` — optionally provide `groupIds` (array); an Enrollment is created for each group.
+        - `teacher` — optionally provide `groupIds` (array); the teacher is assigned to those groups.
       operationId: createUser
       security:
         - BearerAuth: []
@@ -1212,7 +1210,7 @@ paths:
                   phone: 998901234567
                   password: "secret123"
                   role: "student"
-                  groupId: "664f1a2b3c4d5e6f7a8b9c01"
+                  groupIds: ["664f1a2b3c4d5e6f7a8b9c01", "664f1a2b3c4d5e6f7a8b9c02"]
                   gender: "male"
                   age: 18
                   source: "Instagram"
@@ -1254,10 +1252,8 @@ paths:
                   value: { code: "invalidPhone", message: "Telefon raqam noto'g'ri" }
                 phoneUsed:
                   value: { code: "phoneAlreadyUsed", message: "Telefon raqam allaqachon ishlatilgan" }
-                groupRequired:
-                  value: { code: "missingField", message: "Talaba bitta guruhga biriktirilishi shart (groupId)" }
                 groupNotFound:
-                  value: { code: "groupNotFound", message: "Guruh topilmadi" }
+                  value: { code: "groupNotFound", message: "Bir yoki bir nechta guruh topilmadi" }
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
