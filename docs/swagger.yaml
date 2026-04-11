@@ -161,6 +161,110 @@ components:
             type: string
           example: ["664f1a2b3c4d5e6f7a8b9c01", "664f1a2b3c4d5e6f7a8b9c02"]
 
+    EnrollmentGroupSummary:
+      type: object
+      description: Subset of group fields returned inside a student's enrollment
+      properties:
+        _id:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c10"
+        name:
+          type: string
+          example: "Python — Oqshom 1"
+        description:
+          type: string
+          nullable: true
+          example: "Beginner Python evening group"
+        price:
+          type: number
+          example: 450000
+        schedule:
+          type: object
+          properties:
+            days:
+              type: array
+              items:
+                type: string
+              example: ["Monday", "Wednesday", "Friday"]
+            time:
+              type: string
+              example: "18:00"
+        room:
+          type: string
+          nullable: true
+          example: "Room 3"
+
+    StudentEnrollment:
+      type: object
+      description: Enrollment record embedded inside a student object (student field is omitted)
+      properties:
+        _id:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c20"
+        group:
+          $ref: "#/components/schemas/EnrollmentGroupSummary"
+        status:
+          type: string
+          enum: [active, completed, dropped]
+          example: "active"
+        enrolledAt:
+          type: string
+          format: date-time
+          example: "2024-06-01T10:00:00.000Z"
+        monthlyFee:
+          type: number
+          example: 400000
+        discount:
+          type: number
+          default: 0
+          example: 50000
+        discountReason:
+          type: string
+          nullable: true
+          example: "Sibling discount"
+        paymentDay:
+          type: integer
+          minimum: 1
+          maximum: 31
+          example: 5
+        lastPaymentDate:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-06-05T00:00:00.000Z"
+        nextPaymentDate:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-07-05T00:00:00.000Z"
+        debt:
+          type: number
+          default: 0
+          example: 0
+        balance:
+          type: number
+          default: 0
+          example: 20000
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-06-01T10:00:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-06-10T08:30:00.000Z"
+
+    StudentWithEnrollments:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          properties:
+            enrollments:
+              type: array
+              description: All enrollments for this student with populated group data
+              items:
+                $ref: "#/components/schemas/StudentEnrollment"
+
     UserUpdateInput:
       type: object
       description: |
@@ -1236,6 +1340,8 @@ paths:
       summary: List all students
       description: |
         Returns a paginated list of users with role `student`.
+        Each student includes their `enrollments` array, where each enrollment
+        has the linked `group` populated (name, description, price, schedule, room).
 
         **Access:** Admin only.
 
@@ -1258,7 +1364,7 @@ paths:
           description: Number of results per page (default 20, max 100)
       responses:
         "200":
-          description: Students returned
+          description: Students returned with their enrollments and populated group data
           content:
             application/json:
               schema:
@@ -1267,7 +1373,7 @@ paths:
                   users:
                     type: array
                     items:
-                      $ref: "#/components/schemas/User"
+                      $ref: "#/components/schemas/StudentWithEnrollments"
                   total:
                     type: integer
                     example: 38

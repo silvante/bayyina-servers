@@ -276,7 +276,7 @@ const getStudents = async (req, res, next) => {
   try {
     const { page, limit, skip } = getPagination(req.query);
 
-    const [users, total] = await Promise.all([
+    const [students, total] = await Promise.all([
       User.find({ role: "student" })
         .select("-password")
         .skip(skip)
@@ -284,6 +284,23 @@ const getStudents = async (req, res, next) => {
         .sort({ createdAt: -1 }),
       User.countDocuments({ role: "student" }),
     ]);
+
+    const studentIds = students.map((s) => s._id);
+    const enrollments = await Enrollment.find({ student: { $in: studentIds } })
+      .select("-student -__v")
+      .populate("group", "name description price schedule room");
+
+    const enrollmentsByStudent = {};
+    for (const enrollment of enrollments) {
+      const sid = String(enrollment.student);
+      if (!enrollmentsByStudent[sid]) enrollmentsByStudent[sid] = [];
+      enrollmentsByStudent[sid].push(enrollment);
+    }
+
+    const users = students.map((student) => ({
+      ...student.toObject(),
+      enrollments: enrollmentsByStudent[String(student._id)] || [],
+    }));
 
     res.json({
       users,
