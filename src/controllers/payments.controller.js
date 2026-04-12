@@ -95,17 +95,59 @@ const createPayment = async (req, res, next) => {
   try {
     const paidAt = new Date();
 
-    // Validate amount against group's monthly fee
     const enrollmentDoc = await Enrollment.findById(enrollment).populate("group");
     if (!enrollmentDoc) {
       return res.status(404).json({ code: "enrollmentNotFound", message: "Ro'yxatga olish topilmadi" });
     }
-    const monthlyFee = enrollmentDoc.group?.price ?? 0;
-    if (amount < monthlyFee) {
+
+    // Enrollment holati "active" bolmasa => Tolov rad etiladi
+    if (enrollmentDoc.status !== "active") {
       return res.status(400).json({
-        code: "amountTooLow",
-        message: `To'lov miqdori guruh oylik to'lovidan (${monthlyFee}) kam bo'lishi mumkin emas`,
+        code: "enrollmentNotActive",
+        message: `Bu o'quvchi ro'yxati "${enrollmentDoc.status}" holatida, to'lov qabul qilinmaydi`,
       });
+    }
+
+    // Shu Oy uchun Tolov allaqachon amalga oshirilgan bolsa => Takroriy tolov rad etiladi
+    const paymentMonth = new Date(month);
+    const monthStart = new Date(paymentMonth.getFullYear(), paymentMonth.getMonth(), 1);
+    const monthEnd = new Date(paymentMonth.getFullYear(), paymentMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+    const existingPayment = await Payment.findOne({
+      enrollment,
+      month: { $gte: monthStart, $lte: monthEnd },
+      status: "paid",
+    });
+    if (existingPayment) {
+      return res.status(400).json({
+        code: "duplicatePayment",
+        message: "Bu oy uchun to'lov allaqachon amalga oshirilgan",
+      });
+    }
+
+    // Chegirmani hisobga olgan holda samarali oylik to'lovni hisoblash
+    const monthlyFee = enrollmentDoc.group?.price ?? 0;
+    const effectiveFee = Math.max(0, monthlyFee - (enrollmentDoc.discount || 0));
+
+    // Mavjud balans + yangi to'lov
+    const totalAvailable = (enrollmentDoc.balance || 0) + amount;
+
+    let newDebt, newBalance, shouldAdvanceNextPayment;
+
+    if (totalAvailable === effectiveFee) {
+      // Pul oylik tolovga teng => NextPaymentDate ozgaradi, debt: 0, balance: 0
+      newDebt = 0;
+      newBalance = 0;
+      shouldAdvanceNextPayment = true;
+    } else if (totalAvailable < effectiveFee) {
+      // Pul oylik tolovdan kam => NextPaymentDate ozgarmaydi, debt: yetishmagan miqdor, balance: 0
+      newDebt = effectiveFee - totalAvailable;
+      newBalance = 0;
+      shouldAdvanceNextPayment = false;
+    } else {
+      // Pul oylik tolovdan kop => NextPaymentDate ozgaradi, debt: 0, balance: ortiqcha miqdor
+      newDebt = 0;
+      newBalance = totalAvailable - effectiveFee;
+      shouldAdvanceNextPayment = true;
     }
 
     const payment = await Payment.create({
@@ -119,19 +161,16 @@ const createPayment = async (req, res, next) => {
       createdBy: req.user._id,
     });
 
-    // Update enrollment financial fields after payment
-    if (enrollmentDoc) {
-      const paymentDay = enrollmentDoc.paymentDay || paidAt.getDate();
-      const newDebt = Math.max(0, (enrollmentDoc.debt || 0) - amount);
-      const nextPaymentDate = getNextPaymentDate(paidAt, paymentDay);
+    const paymentDay = enrollmentDoc.paymentDay || paidAt.getDate();
+    const enrollmentUpdate = {
+      lastPaymentDate: paidAt,
+      debt: newDebt,
+      balance: newBalance,
+      paymentDay,
+      nextPaymentDate: shouldAdvanceNextPayment ? getNextPaymentDate(paidAt, paymentDay) : undefined,
+    };
 
-      await Enrollment.findByIdAndUpdate(enrollment, {
-        lastPaymentDate: paidAt,
-        nextPaymentDate,
-        debt: newDebt,
-        paymentDay,
-      });
-    }
+    await Enrollment.findByIdAndUpdate(enrollment, enrollmentUpdate);
 
     res.status(201).json({ payment, code: "paymentCreated", message: texts.paymentCreated });
   } catch (err) {

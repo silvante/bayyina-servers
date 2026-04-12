@@ -2251,12 +2251,27 @@ paths:
       tags: [Payments]
       summary: Record a payment
       description: |
-        Creates a new payment record. Status is automatically set to `paid` and `paidAt` is set to the current time.
+        Creates a new payment record. `status` is automatically set to `paid` and `paidAt` is set to the current time.
 
-        **Side effects on the linked Enrollment:**
-        - `lastPaymentDate` is set to the current timestamp
-        - `nextPaymentDate` is calculated as the next occurrence of the enrollment's `paymentDay` (one month ahead, clamped to last day of month)
-        - `debt` is reduced by the payment `amount` (minimum 0)
+        **Validation:**
+        - Enrollment must exist and its `status` must be `"active"` — otherwise `400 enrollmentNotActive`
+        - Only one `paid` payment is allowed per enrollment per calendar month — otherwise `400 duplicatePayment`
+
+        **Effective fee calculation:**
+        ```
+        effectiveFee  = group.price − enrollment.discount
+        totalAvailable = enrollment.balance + amount
+        ```
+
+        **Side effects on the linked Enrollment** (based on `totalAvailable` vs `effectiveFee`):
+
+        | Case | `nextPaymentDate` | `debt` | `balance` |
+        |------|-------------------|--------|-----------|
+        | `totalAvailable === effectiveFee` | Advances by 1 month (clamped to last day) | 0 | 0 |
+        | `totalAvailable < effectiveFee` | Unchanged | `effectiveFee − totalAvailable` | 0 |
+        | `totalAvailable > effectiveFee` | Advances by 1 month (clamped to last day) | 0 | `totalAvailable − effectiveFee` |
+
+        `lastPaymentDate` and `paymentDay` are always updated.
 
         **Access:** Admin, Teacher.
       operationId: createPayment
@@ -2291,7 +2306,7 @@ paths:
                     type: string
                     example: "To'lov qabul qilindi"
         "400":
-          description: Missing or invalid fields
+          description: Missing fields, inactive enrollment, or duplicate payment
           content:
             application/json:
               schema:
@@ -2305,10 +2320,25 @@ paths:
                   value: { code: "missingField", message: "To'lov miqdori kiritilishi shart" }
                 missingMonth:
                   value: { code: "missingField", message: "Oy kiritilishi shart" }
+                enrollmentNotActive:
+                  summary: Enrollment is not active
+                  value: { code: "enrollmentNotActive", message: "Bu o'quvchi ro'yxati \"dropped\" holatida, to'lov qabul qilinmaydi" }
+                duplicatePayment:
+                  summary: Payment already recorded for this month
+                  value: { code: "duplicatePayment", message: "Bu oy uchun to'lov allaqachon amalga oshirilgan" }
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Enrollment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "enrollmentNotFound"
+                message: "Ro'yxatga olish topilmadi"
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
