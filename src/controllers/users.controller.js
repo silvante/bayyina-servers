@@ -169,6 +169,9 @@ const createUser = async (req, res, next) => {
       ...(source && { source }),
     });
 
+    const enrolledDate = new Date();
+    const resolvedPaymentDay = enrolledDate.getDate();
+
     // Attach to groups
     if (effectiveRole === "teacher") {
       if (groupIds && Array.isArray(groupIds) && groupIds.length > 0) {
@@ -180,7 +183,13 @@ const createUser = async (req, res, next) => {
     } else {
       if (groupIds && Array.isArray(groupIds) && groupIds.length > 0) {
         await Enrollment.insertMany(
-          groupIds.map((gid) => ({ student: user._id, group: gid })),
+          groupIds.map((gid) => ({
+            student: user._id,
+            group: gid,
+            enrolledAt: enrolledDate,
+            paymentDay: resolvedPaymentDay,
+            nextPaymentDate: enrolledDate,
+          })),
         );
       }
     }
