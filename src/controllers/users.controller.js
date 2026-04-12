@@ -49,7 +49,7 @@ const getUsers = async (req, res, next) => {
 // GET /users/:id
 const getUser = async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.id).select("-password");
+    const user = await User.findById(req.params.id);
     if (!user) {
       return res
         .status(404)
@@ -77,12 +77,10 @@ const createUser = async (req, res, next) => {
   } = req.body;
 
   if (!firstName || !lastName) {
-    return res
-      .status(400)
-      .json({
-        code: "missingField",
-        message: "Ism va Familiya kiritilishi shart",
-      });
+    return res.status(400).json({
+      code: "missingField",
+      message: "Ism va Familiya kiritilishi shart",
+    });
   }
 
   if (!isValidPhone(phone)) {
@@ -100,12 +98,10 @@ const createUser = async (req, res, next) => {
   const effectiveRole = role || "student";
   const allowedRoles = ["teacher", "student"];
   if (!allowedRoles.includes(effectiveRole)) {
-    return res
-      .status(400)
-      .json({
-        code: "roleNotAllowed",
-        message: "Ushbu rolga ruxsat berilmaydi",
-      });
+    return res.status(400).json({
+      code: "roleNotAllowed",
+      message: "Ushbu rolga ruxsat berilmaydi",
+    });
   }
 
   // they should be uptional
@@ -139,12 +135,10 @@ const createUser = async (req, res, next) => {
     ) {
       const foundGroups = await Group.find({ _id: { $in: groupIds } });
       if (foundGroups.length !== groupIds.length) {
-        return res
-          .status(400)
-          .json({
-            code: "groupNotFound",
-            message: "Bir yoki bir nechta guruh topilmadi",
-          });
+        return res.status(400).json({
+          code: "groupNotFound",
+          message: "Bir yoki bir nechta guruh topilmadi",
+        });
       }
     }
 
@@ -156,9 +150,10 @@ const createUser = async (req, res, next) => {
     ) {
       const foundGroups = await Group.find({ _id: { $in: groupIds } });
       if (foundGroups.length !== groupIds.length) {
-        return res
-          .status(400)
-          .json({ code: "groupNotFound", message: "Bir yoki bir nechta guruh topilmadi" });
+        return res.status(400).json({
+          code: "groupNotFound",
+          message: "Bir yoki bir nechta guruh topilmadi",
+        });
       }
     }
 
@@ -177,12 +172,15 @@ const createUser = async (req, res, next) => {
     // Attach to groups
     if (effectiveRole === "teacher") {
       if (groupIds && Array.isArray(groupIds) && groupIds.length > 0) {
-        await Group.updateMany({ _id: { $in: groupIds } }, { teacher: user._id });
+        await Group.updateMany(
+          { _id: { $in: groupIds } },
+          { teacher: user._id },
+        );
       }
     } else {
       if (groupIds && Array.isArray(groupIds) && groupIds.length > 0) {
         await Enrollment.insertMany(
-          groupIds.map((gid) => ({ student: user._id, group: gid }))
+          groupIds.map((gid) => ({ student: user._id, group: gid })),
         );
       }
     }
@@ -330,4 +328,12 @@ const getStudents = async (req, res, next) => {
   }
 };
 
-module.exports = { getUsers, getUser, createUser, updateUser, deleteUser, getTeachers, getStudents };
+module.exports = {
+  getUsers,
+  getUser,
+  createUser,
+  updateUser,
+  deleteUser,
+  getTeachers,
+  getStudents,
+};
