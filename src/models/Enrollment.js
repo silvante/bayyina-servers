@@ -18,7 +18,6 @@ const Enrollment = new mongoose.Schema(
       enum: ["active", "completed", "dropped"],
     },
     enrolledAt: { type: Date, default: Date.now },
-    monthlyFee: { type: Number },
     discount: { type: Number, default: 0 },
     discountReason: { type: String },
     paymentDay: { type: Number, min: 1, max: 31 },

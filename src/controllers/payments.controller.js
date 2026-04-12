@@ -95,6 +95,19 @@ const createPayment = async (req, res, next) => {
   try {
     const paidAt = new Date();
 
+    // Validate amount against group's monthly fee
+    const enrollmentDoc = await Enrollment.findById(enrollment).populate("group");
+    if (!enrollmentDoc) {
+      return res.status(404).json({ code: "enrollmentNotFound", message: "Ro'yxatga olish topilmadi" });
+    }
+    const monthlyFee = enrollmentDoc.group?.price ?? 0;
+    if (amount < monthlyFee) {
+      return res.status(400).json({
+        code: "amountTooLow",
+        message: `To'lov miqdori guruh oylik to'lovidan (${monthlyFee}) kam bo'lishi mumkin emas`,
+      });
+    }
+
     const payment = await Payment.create({
       enrollment,
       student,
@@ -107,7 +120,6 @@ const createPayment = async (req, res, next) => {
     });
 
     // Update enrollment financial fields after payment
-    const enrollmentDoc = await Enrollment.findById(enrollment);
     if (enrollmentDoc) {
       const paymentDay = enrollmentDoc.paymentDay || paidAt.getDate();
       const newDebt = Math.max(0, (enrollmentDoc.debt || 0) - amount);
