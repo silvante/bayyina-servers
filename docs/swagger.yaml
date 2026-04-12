@@ -115,7 +115,7 @@ components:
 
     UserInput:
       type: object
-      required: [firstName, phone, password]
+      required: [firstName, lastName, phone, password]
       properties:
         firstName:
           type: string
@@ -873,8 +873,8 @@ components:
       in: query
       schema:
         type: integer
-        default: 10
-      description: Number of results per page
+        default: 20
+      description: Number of results per page (default 20, max 100)
 
   # ─────────────────────────────────────────────
   # Reusable responses
@@ -1166,10 +1166,16 @@ paths:
                     example: 1
                   limit:
                     type: integer
-                    example: 10
+                    example: 20
                   totalPages:
                     type: integer
-                    example: 5
+                    example: 3
+                  hasNextPage:
+                    type: boolean
+                    example: true
+                  hasPrevPage:
+                    type: boolean
+                    example: false
                   code:
                     type: string
                     example: "usersFound"
@@ -1225,14 +1231,17 @@ paths:
                   groupIds: ["664f1a2b3c4d5e6f7a8b9c01", "664f1a2b3c4d5e6f7a8b9c02"]
       responses:
         "201":
-          description: User created successfully
+          description: User created successfully. For `student` role the `user` object includes an `enrollments` array with populated group data.
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   user:
-                    $ref: "#/components/schemas/User"
+                    oneOf:
+                      - $ref: "#/components/schemas/StudentWithEnrollments"
+                      - $ref: "#/components/schemas/User"
+                    description: For students, includes `enrollments` array; for teachers, plain user object.
                   code:
                     type: string
                     example: "userCreated"
@@ -1501,7 +1510,7 @@ paths:
 
         **Access:** Admin only.
 
-        > **Warning:** This does not cascade-delete related Enrollments or Payments.
+        > **Note:** For `student` accounts, all their Enrollments are automatically deleted (cascade). Payments are NOT deleted — they remain as historical records.
       operationId: deleteUser
       security:
         - BearerAuth: []
@@ -1566,10 +1575,16 @@ paths:
                     example: 1
                   limit:
                     type: integer
-                    example: 10
+                    example: 20
                   totalPages:
                     type: integer
                     example: 1
+                  hasNextPage:
+                    type: boolean
+                    example: false
+                  hasPrevPage:
+                    type: boolean
+                    example: false
                   code:
                     type: string
                     example: "groupsFound"
@@ -1680,7 +1695,7 @@ paths:
         - $ref: "#/components/parameters/groupId"
       responses:
         "200":
-          description: Group found
+          description: Group found, with all its enrollments (student populated)
           content:
             application/json:
               schema:
@@ -1688,6 +1703,11 @@ paths:
                 properties:
                   group:
                     $ref: "#/components/schemas/Group"
+                  enrollments:
+                    type: array
+                    description: All enrollments for this group, with student populated (no password)
+                    items:
+                      $ref: "#/components/schemas/Enrollment"
                   code:
                     type: string
                     example: "groupsFound"
@@ -1782,8 +1802,7 @@ paths:
 
         **Access:** Admin only.
 
-        > **Warning:** This does not cascade-delete related Enrollments or Payments.
-        > Consider setting `isActive: false` instead.
+        > **Note:** Deleting a group automatically cascade-deletes all its Enrollments. Payments are NOT deleted — they remain as historical records.
       operationId: deleteGroup
       security:
         - BearerAuth: []
@@ -1874,10 +1893,16 @@ paths:
                     example: 1
                   limit:
                     type: integer
-                    example: 10
+                    example: 20
                   totalPages:
                     type: integer
-                    example: 3
+                    example: 2
+                  hasNextPage:
+                    type: boolean
+                    example: true
+                  hasPrevPage:
+                    type: boolean
+                    example: false
                   code:
                     type: string
                     example: "enrollmentsFound"
@@ -2201,10 +2226,10 @@ paths:
                     example: 1
                   limit:
                     type: integer
-                    example: 10
+                    example: 20
                   totalPages:
                     type: integer
-                    example: 3
+                    example: 2
                   hasNextPage:
                     type: boolean
                     example: true
@@ -2227,6 +2252,11 @@ paths:
       summary: Record a payment
       description: |
         Creates a new payment record. Status is automatically set to `paid` and `paidAt` is set to the current time.
+
+        **Side effects on the linked Enrollment:**
+        - `lastPaymentDate` is set to the current timestamp
+        - `nextPaymentDate` is calculated as the next occurrence of the enrollment's `paymentDay` (one month ahead, clamped to last day of month)
+        - `debt` is reduced by the payment `amount` (minimum 0)
 
         **Access:** Admin, Teacher.
       operationId: createPayment
