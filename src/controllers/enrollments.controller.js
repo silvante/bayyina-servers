@@ -88,12 +88,16 @@ const createEnrollment = async (req, res, next) => {
       return res.status(400).json({ code: "alreadyEnrolled", message: texts.alreadyEnrolled });
     }
 
+    const enrolledDate = new Date();
+    const resolvedPaymentDay = paymentDay != null ? paymentDay : enrolledDate.getDate();
+
     const enrollment = await Enrollment.create({
       student, group,
+      enrolledAt: enrolledDate,
       ...(monthlyFee != null && { monthlyFee }),
       ...(discount != null && { discount }),
       ...(discountReason && { discountReason }),
-      ...(paymentDay != null && { paymentDay }),
+      paymentDay: resolvedPaymentDay,
       ...(lastPaymentDate && { lastPaymentDate: new Date(lastPaymentDate) }),
       ...(nextPaymentDate && { nextPaymentDate: new Date(nextPaymentDate) }),
       ...(debt != null && { debt }),

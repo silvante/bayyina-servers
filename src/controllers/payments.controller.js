@@ -1,6 +1,19 @@
 const texts = require("../data/texts");
 const { pickAllowedFields, getPagination, buildPaginationMeta } = require("../utils/helpers");
 const Payment = require("../models/Payment");
+const Enrollment = require("../models/Enrollment");
+
+// Returns the next date that falls on `day` of month, starting from `fromDate`
+function getNextPaymentDate(fromDate, day) {
+  const d = new Date(fromDate);
+  // Move to the next month
+  d.setMonth(d.getMonth() + 1);
+  // Clamp day to the last day of that month (e.g. day=31 in April → 30)
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, lastDay));
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 // GET /payments
 const getPayments = async (req, res, next) => {
@@ -80,6 +93,8 @@ const createPayment = async (req, res, next) => {
   }
 
   try {
+    const paidAt = new Date();
+
     const payment = await Payment.create({
       enrollment,
       student,
@@ -87,9 +102,24 @@ const createPayment = async (req, res, next) => {
       month: new Date(month),
       note,
       status: "paid",
-      paidAt: new Date(),
+      paidAt,
       createdBy: req.user._id,
     });
+
+    // Update enrollment financial fields after payment
+    const enrollmentDoc = await Enrollment.findById(enrollment);
+    if (enrollmentDoc) {
+      const paymentDay = enrollmentDoc.paymentDay || paidAt.getDate();
+      const newDebt = Math.max(0, (enrollmentDoc.debt || 0) - amount);
+      const nextPaymentDate = getNextPaymentDate(paidAt, paymentDay);
+
+      await Enrollment.findByIdAndUpdate(enrollment, {
+        lastPaymentDate: paidAt,
+        nextPaymentDate,
+        debt: newDebt,
+        paymentDay,
+      });
+    }
 
     res.status(201).json({ payment, code: "paymentCreated", message: texts.paymentCreated });
   } catch (err) {
