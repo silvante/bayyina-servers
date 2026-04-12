@@ -20,6 +20,13 @@ const User = new mongoose.Schema(
 );
 
 
+User.post("findOneAndDelete", async function (doc) {
+  if (doc && doc.role === "student") {
+    const Enrollment = require("./Enrollment");
+    await Enrollment.deleteMany({ student: doc._id });
+  }
+});
+
 User.methods.comparePassword = async function (password) {
   return password === this.password;
 };

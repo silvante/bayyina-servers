@@ -40,4 +40,11 @@ const Group = new mongoose.Schema(
   { timestamps: true }
 );
 
+Group.post("findOneAndDelete", async function (doc) {
+  if (doc) {
+    const Enrollment = require("./Enrollment");
+    await Enrollment.deleteMany({ group: doc._id });
+  }
+});
+
 module.exports = mongoose.model("Group", Group);
