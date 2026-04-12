@@ -1,6 +1,7 @@
 const texts = require("../data/texts");
 const { pickAllowedFields, getPagination, buildPaginationMeta } = require("../utils/helpers");
 const Group = require("../models/Group");
+const Enrollment = require("../models/Enrollment");
 
 // GET /groups
 const getGroups = async (req, res, next) => {
@@ -48,7 +49,11 @@ const getGroup = async (req, res, next) => {
       return res.status(403).json({ code: "forbidden", message: texts.forbidden });
     }
 
-    res.json({ group, code: "groupsFound", message: texts.groupsFound });
+    const enrollments = await Enrollment.find({ group: group._id })
+      .select("-group -__v")
+      .populate({ path: "student", select: "-password -__v" });
+
+    res.json({ group, enrollments, code: "groupsFound", message: texts.groupsFound });
   } catch (err) {
     next(err);
   }
