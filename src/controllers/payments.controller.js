@@ -131,27 +131,46 @@ const createPayment = async (req, res, next) => {
     const monthlyFee = enrollmentDoc.group?.price ?? 0;
     const effectiveFee = Math.max(0, monthlyFee - (enrollmentDoc.discount || 0));
 
-    // Mavjud balans + yangi to'lov - mavjud qarz
     const existingDebt = enrollmentDoc.debt || 0;
-    const totalAvailable = (enrollmentDoc.balance || 0) + amount - existingDebt;
+    const existingBalance = enrollmentDoc.balance || 0;
+
+    // Shu oy uchun avvalroq to'lov bo'lganmi? (qo'shimcha to'lovmi yoki yangi oymi)
+    const hasPriorPaymentForMonth = await Payment.exists({
+      enrollment,
+      month: { $gte: monthStart, $lte: monthEnd },
+      status: "paid",
+    });
 
     let newDebt, newBalance, shouldAdvanceNextPayment;
 
-    if (totalAvailable === effectiveFee) {
-      // Pul oylik tolovga teng => NextPaymentDate ozgaradi, debt: 0, balance: 0
-      newDebt = 0;
-      newBalance = 0;
-      shouldAdvanceNextPayment = true;
-    } else if (totalAvailable < effectiveFee) {
-      // Pul oylik tolovdan kam => NextPaymentDate ozgarmaydi, debt: yetishmagan miqdor, balance: 0
-      newDebt = effectiveFee - totalAvailable;
-      newBalance = 0;
-      shouldAdvanceNextPayment = false;
+    if (hasPriorPaymentForMonth) {
+      // Qo'shimcha to'lov: oylik to'lov majburiyati allaqachon hisoblangan.
+      // Avval mavjud qarzni yopamiz, ortig'i balansga qo'shiladi.
+      const totalAvailable = existingBalance + amount;
+
+      if (totalAvailable >= existingDebt) {
+        newDebt = 0;
+        newBalance = totalAvailable - existingDebt;
+        // Qarz hozir yopildi (ilgari bor edi) => keyingi to'lov sanasi suriladi
+        shouldAdvanceNextPayment = existingDebt > 0;
+      } else {
+        newDebt = existingDebt - totalAvailable;
+        newBalance = 0;
+        shouldAdvanceNextPayment = false;
+      }
     } else {
-      // Pul oylik tolovdan kop => NextPaymentDate ozgaradi, debt: 0, balance: ortiqcha miqdor
-      newDebt = 0;
-      newBalance = totalAvailable - effectiveFee;
-      shouldAdvanceNextPayment = true;
+      // Yangi oy uchun birinchi to'lov: oylik to'lov majburiyati qo'shiladi.
+      const totalAvailable = existingBalance + amount - existingDebt;
+
+      if (totalAvailable >= effectiveFee) {
+        newDebt = 0;
+        newBalance = totalAvailable - effectiveFee;
+        shouldAdvanceNextPayment = true;
+      } else {
+        newDebt = effectiveFee - totalAvailable;
+        newBalance = 0;
+        shouldAdvanceNextPayment = false;
+      }
     }
 
     const payment = await Payment.create({
