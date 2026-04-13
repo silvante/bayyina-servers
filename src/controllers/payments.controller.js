@@ -112,17 +112,20 @@ const createPayment = async (req, res, next) => {
     const paymentMonth = new Date(month);
     const monthStart = new Date(paymentMonth.getFullYear(), paymentMonth.getMonth(), 1);
     const monthEnd = new Date(paymentMonth.getFullYear(), paymentMonth.getMonth() + 1, 0, 23, 59, 59, 999);
-    const existingPayment = await Payment.findOne({
-      enrollment,
-      month: { $gte: monthStart, $lte: monthEnd },
-      status: "paid",
-    });
-    if (existingPayment) {
-      return res.status(400).json({
-        code: "duplicatePayment",
-        message: "Bu oy uchun to'lov allaqachon amalga oshirilgan",
-      });
-    }
+    
+    // Double payment are acceptable
+    
+    // const existingPayment = await Payment.findOne({
+    //   enrollment,
+    //   month: { $gte: monthStart, $lte: monthEnd },
+    //   status: "paid",
+    // });
+    // if (existingPayment) {
+    //   return res.status(400).json({
+    //     code: "duplicatePayment",
+    //     message: "Bu oy uchun to'lov allaqachon amalga oshirilgan",
+    //   });
+    // }
 
     // Chegirmani hisobga olgan holda samarali oylik to'lovni hisoblash
     const monthlyFee = enrollmentDoc.group?.price ?? 0;
