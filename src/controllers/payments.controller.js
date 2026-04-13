@@ -131,8 +131,9 @@ const createPayment = async (req, res, next) => {
     const monthlyFee = enrollmentDoc.group?.price ?? 0;
     const effectiveFee = Math.max(0, monthlyFee - (enrollmentDoc.discount || 0));
 
-    // Mavjud balans + yangi to'lov
-    const totalAvailable = (enrollmentDoc.balance || 0) + amount - (enrollmentDoc.debt || 0);
+    // Mavjud balans + yangi to'lov - mavjud qarz
+    const existingDebt = enrollmentDoc.debt || 0;
+    const totalAvailable = (enrollmentDoc.balance || 0) + amount - existingDebt;
 
     let newDebt, newBalance, shouldAdvanceNextPayment;
 
