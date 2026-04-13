@@ -40,6 +40,17 @@ const texts = {
   enrollmentsFound: "Ro'yxatga olinganlar olindi",
   alreadyEnrolled: "O'quvchi bu guruhda allaqachon bor",
 
+  // Attendance
+  attendanceMarked: "Davomat belgilandi",
+  attendanceUpdated: "Davomat yangilandi",
+  attendanceDeleted: "Davomat o'chirildi",
+  attendanceFound: "Davomat ma'lumotlari olindi",
+  attendanceNotFound: "Davomat topilmadi",
+  invalidSessionDate: "Tanlangan sana guruh jadvaliga mos kelmaydi",
+  notGroupTeacher: "Siz bu guruhning o'qituvchisi emassiz",
+  enrollmentNotInGroup: "Bu o'quvchi bu guruhga tegishli emas",
+  missingField: "Majburiy maydon to'ldirilmagan",
+
   // Payments
   paymentCreated: "To'lov muvaffaqiyatli yaratildi",
   paymentUpdated: "To'lov muvaffaqiyatli yangilandi",

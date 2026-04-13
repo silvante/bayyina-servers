@@ -29,6 +29,13 @@ const Enrollment = new mongoose.Schema(
   { timestamps: true },
 );
 
+Enrollment.post("findOneAndDelete", async function (doc) {
+  if (doc) {
+    const Attendance = require("./Attendance");
+    await Attendance.deleteMany({ enrollment: doc._id });
+  }
+});
+
 module.exports = mongoose.model("Enrollment", Enrollment);
 
 // Agar Pul guruh oylik toloviga teng bolsa => NextPaymentDay ozgaradi, debt: 0, balance: 0

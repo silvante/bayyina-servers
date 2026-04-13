@@ -23,7 +23,11 @@ const User = new mongoose.Schema(
 User.post("findOneAndDelete", async function (doc) {
   if (doc && doc.role === "student") {
     const Enrollment = require("./Enrollment");
-    await Enrollment.deleteMany({ student: doc._id });
+    const Attendance = require("./Attendance");
+    await Promise.all([
+      Enrollment.deleteMany({ student: doc._id }),
+      Attendance.deleteMany({ student: doc._id }),
+    ]);
   }
 });
 

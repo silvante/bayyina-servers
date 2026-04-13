@@ -6,6 +6,7 @@ const usersRoute = require("../routes/users");
 const groupsRoute = require("../routes/groups");
 const enrollmentsRoute = require("../routes/enrollments");
 const paymentsRoute = require("../routes/payments");
+const attendanceRoute = require("../routes/attendance");
 
 // Error handler
 const errorHandler = require("../middlewares/errorHandler");
@@ -18,5 +19,6 @@ app.use("/api/users", usersRoute);
 app.use("/api/groups", groupsRoute);
 app.use("/api/enrollments", enrollmentsRoute);
 app.use("/api/payments", paymentsRoute);
+app.use("/api/attendance", attendanceRoute);
 
 app.use(errorHandler);

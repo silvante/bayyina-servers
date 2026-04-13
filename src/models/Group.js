@@ -43,7 +43,11 @@ const Group = new mongoose.Schema(
 Group.post("findOneAndDelete", async function (doc) {
   if (doc) {
     const Enrollment = require("./Enrollment");
-    await Enrollment.deleteMany({ group: doc._id });
+    const Attendance = require("./Attendance");
+    await Promise.all([
+      Enrollment.deleteMany({ group: doc._id }),
+      Attendance.deleteMany({ group: doc._id }),
+    ]);
   }
 });
 

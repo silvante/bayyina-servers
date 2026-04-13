@@ -48,6 +48,8 @@ tags:
     description: Enrollment management — link students to groups and track per-student financial details (fee, discount, debt, balance)
   - name: Payments
     description: Payment management — record and track monthly payments for enrolled students
+  - name: Attendance
+    description: Attendance tracking — mark student presence on group session days (per the group's weekly schedule)
 
 # ─────────────────────────────────────────────
 # Security scheme
@@ -748,6 +750,172 @@ components:
           description: If status is set to `paid` and paidAt is omitted, it defaults to now
           example: "2024-06-10T09:00:00.000Z"
 
+    # ── Attendance ───────────────────────────────
+    Attendance:
+      type: object
+      description: A single attendance record for one student on one group session day
+      properties:
+        _id:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c40"
+        enrollment:
+          type: string
+          description: ObjectId of the enrollment the record belongs to
+          example: "664f1a2b3c4d5e6f7a8b9c20"
+        group:
+          oneOf:
+            - type: string
+            - type: object
+              properties:
+                _id:
+                  type: string
+                  example: "664f1a2b3c4d5e6f7a8b9c10"
+                name:
+                  type: string
+                  example: "Python — Oqshom 1"
+                schedule:
+                  type: object
+                  properties:
+                    days:
+                      type: array
+                      items:
+                        type: string
+                        enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
+                    time:
+                      type: string
+                      example: "18:00"
+        student:
+          oneOf:
+            - type: string
+            - type: object
+              properties:
+                _id:
+                  type: string
+                  example: "664f1a2b3c4d5e6f7a8b9c0d"
+                firstName:
+                  type: string
+                  example: "Jasur"
+                lastName:
+                  type: string
+                  example: "Toshmatov"
+                phone:
+                  type: integer
+                  example: 998901234567
+        date:
+          type: string
+          format: date-time
+          description: Session day normalised to 00:00:00 UTC
+          example: "2026-04-13T00:00:00.000Z"
+        status:
+          type: string
+          enum: [present, absent]
+          example: "present"
+        note:
+          type: string
+          nullable: true
+          example: "Kech keldi"
+        markedBy:
+          type: string
+          description: ObjectId of the teacher who marked the record
+          example: "664f1a2b3c4d5e6f7a8b9c0f"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-04-13T10:00:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-04-13T10:00:00.000Z"
+
+    AttendanceBulkInput:
+      type: object
+      required: [group, date, entries]
+      properties:
+        group:
+          type: string
+          description: ObjectId of the group the session belongs to
+          example: "664f1a2b3c4d5e6f7a8b9c10"
+        date:
+          type: string
+          format: date
+          description: |
+            Session date (YYYY-MM-DD). Must be a weekday listed in the group's `schedule.days`,
+            otherwise the request is rejected with `invalidSessionDate`.
+          example: "2026-04-13"
+        entries:
+          type: array
+          description: One entry per enrollment being marked. Enrollments must belong to the group.
+          items:
+            type: object
+            required: [enrollment, status]
+            properties:
+              enrollment:
+                type: string
+                example: "664f1a2b3c4d5e6f7a8b9c20"
+              status:
+                type: string
+                enum: [present, absent]
+                example: "present"
+              note:
+                type: string
+                example: "Kech keldi"
+
+    AttendanceUpdateInput:
+      type: object
+      description: Partial update — only provided fields are changed.
+      properties:
+        status:
+          type: string
+          enum: [present, absent]
+          example: "absent"
+        note:
+          type: string
+          example: "Kasal"
+
+    AttendanceSessionRow:
+      type: object
+      description: |
+        Per-enrollment row for a single session day. `status` is `null` when the
+        enrollment has not yet been marked for this date.
+      properties:
+        enrollment:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c20"
+        student:
+          type: object
+          properties:
+            _id:
+              type: string
+              example: "664f1a2b3c4d5e6f7a8b9c0d"
+            firstName:
+              type: string
+              example: "Jasur"
+            lastName:
+              type: string
+              example: "Toshmatov"
+            phone:
+              type: integer
+              example: 998901234567
+        status:
+          type: string
+          enum: [present, absent]
+          nullable: true
+          example: "present"
+        note:
+          type: string
+          nullable: true
+          example: null
+        attendanceId:
+          type: string
+          nullable: true
+          description: ObjectId of the attendance record if one exists; null if unmarked
+          example: "664f1a2b3c4d5e6f7a8b9c40"
+        markedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-04-13T10:00:00.000Z"
+
     # ── Pagination ───────────────────────────────
     PaginationMeta:
       type: object
@@ -859,6 +1027,15 @@ components:
       schema:
         type: string
         example: "664f1a2b3c4d5e6f7a8b9c30"
+
+    attendanceId:
+      name: id
+      in: path
+      required: true
+      description: MongoDB ObjectId of the attendance record
+      schema:
+        type: string
+        example: "664f1a2b3c4d5e6f7a8b9c40"
 
     pageParam:
       name: page
@@ -2453,5 +2630,537 @@ paths:
               example:
                 code: "paymentNotFound"
                 message: "To'lov topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ══════════════════════════════════════════
+  # ATTENDANCE
+  # ══════════════════════════════════════════
+
+  /attendance:
+    get:
+      tags: [Attendance]
+      summary: List attendance records
+      description: |
+        Returns a paginated, filterable list of attendance records populated with student and group info.
+
+        **Access rules:**
+        - `admin` — can list all records; supports all filters
+        - `teacher` — automatically scoped to groups where they are the teacher; a `group` filter outside their own groups returns `403`
+        - `student` — automatically scoped to their own records; any `student` query param is overridden
+      operationId: getAttendances
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/pageParam"
+        - $ref: "#/components/parameters/limitParam"
+        - name: group
+          in: query
+          description: Filter by group ObjectId
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c10"
+        - name: student
+          in: query
+          description: Filter by student ObjectId (ignored for role `student`)
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c0d"
+        - name: enrollment
+          in: query
+          description: Filter by enrollment ObjectId
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c20"
+        - name: status
+          in: query
+          description: Filter by attendance status
+          schema:
+            type: string
+            enum: [present, absent]
+            example: "present"
+        - name: from
+          in: query
+          description: Inclusive lower bound of the session date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+            example: "2026-04-01"
+        - name: to
+          in: query
+          description: Inclusive upper bound of the session date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+            example: "2026-04-30"
+      responses:
+        "200":
+          description: Attendance records returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attendance:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Attendance"
+                  total:
+                    type: integer
+                    example: 12
+                  page:
+                    type: integer
+                    example: 1
+                  limit:
+                    type: integer
+                    example: 20
+                  totalPages:
+                    type: integer
+                    example: 1
+                  hasNextPage:
+                    type: boolean
+                    example: false
+                  hasPrevPage:
+                    type: boolean
+                    example: false
+                  code:
+                    type: string
+                    example: "attendanceFound"
+                  message:
+                    type: string
+                    example: "Davomat ma'lumotlari olindi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /attendance/session:
+    get:
+      tags: [Attendance]
+      summary: Get per-enrollment snapshot for a single session day
+      description: |
+        Returns the per-enrollment roster for a group on a specific date, with each row
+        showing whether the enrollment has been marked and the current status/note.
+        Rows without an attendance record yet have `status: null` so the frontend can render an
+        "unmarked" state.
+
+        `isValidSchedule` tells the frontend whether the selected date is actually one of the
+        group's scheduled weekdays — useful for disabling invalid dates in a date picker.
+
+        **Access rules:**
+        - `admin` — any group
+        - `teacher` — only their own groups
+        - `student` — only groups they are enrolled in; the returned rows are scoped to the student's own enrollment(s)
+      operationId: getSessionAttendance
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: group
+          in: query
+          required: true
+          description: Group ObjectId
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c10"
+        - name: date
+          in: query
+          required: true
+          description: Session date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+            example: "2026-04-13"
+      responses:
+        "200":
+          description: Session snapshot returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  group:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        example: "664f1a2b3c4d5e6f7a8b9c10"
+                      name:
+                        type: string
+                        example: "Python — Oqshom 1"
+                      schedule:
+                        type: object
+                        properties:
+                          days:
+                            type: array
+                            items:
+                              type: string
+                          time:
+                            type: string
+                  date:
+                    type: string
+                    format: date-time
+                    example: "2026-04-13T00:00:00.000Z"
+                  weekday:
+                    type: string
+                    example: "Monday"
+                  isValidSchedule:
+                    type: boolean
+                    example: true
+                  rows:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AttendanceSessionRow"
+                  code:
+                    type: string
+                    example: "attendanceFound"
+                  message:
+                    type: string
+                    example: "Davomat ma'lumotlari olindi"
+        "400":
+          description: Missing or invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing:
+                  value: { code: "missingField", message: "Guruh va sana kiritilishi shart" }
+                invalidDate:
+                  value: { code: "invalidSessionDate", message: "Tanlangan sana guruh jadvaliga mos kelmaydi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "groupNotFound"
+                message: "Guruh topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /attendance/sessions:
+    get:
+      tags: [Attendance]
+      summary: Expand a group's weekly schedule into concrete session dates
+      description: |
+        Takes a group and a date range, and returns every date within the range whose weekday
+        is listed in the group's `schedule.days`. Pure computation — does not touch the
+        `Attendance` collection. Useful for showing "which days should have attendance" in a calendar.
+
+        Defaults: if `from` and `to` are omitted, the range is the last 30 days through today (UTC).
+
+        **Access rules:** same as `/attendance/session`.
+      operationId: getScheduleSessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: group
+          in: query
+          required: true
+          description: Group ObjectId
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c10"
+        - name: from
+          in: query
+          description: Inclusive start date (YYYY-MM-DD). Defaults to 30 days before today.
+          schema:
+            type: string
+            format: date
+            example: "2026-03-14"
+        - name: to
+          in: query
+          description: Inclusive end date (YYYY-MM-DD). Defaults to today.
+          schema:
+            type: string
+            format: date
+            example: "2026-04-13"
+      responses:
+        "200":
+          description: Expanded session dates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  group:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                      name:
+                        type: string
+                      schedule:
+                        type: object
+                        properties:
+                          days:
+                            type: array
+                            items:
+                              type: string
+                          time:
+                            type: string
+                  from:
+                    type: string
+                    format: date-time
+                  to:
+                    type: string
+                    format: date-time
+                  sessions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                          format: date-time
+                          example: "2026-04-13T00:00:00.000Z"
+                        weekday:
+                          type: string
+                          enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
+                          example: "Monday"
+                  code:
+                    type: string
+                    example: "attendanceFound"
+                  message:
+                    type: string
+                    example: "Davomat ma'lumotlari olindi"
+        "400":
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing:
+                  value: { code: "missingField", message: "Guruh kiritilishi shart" }
+                invalidDate:
+                  value: { code: "invalidSessionDate", message: "Tanlangan sana guruh jadvaliga mos kelmaydi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "groupNotFound"
+                message: "Guruh topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /attendance/bulk:
+    post:
+      tags: [Attendance]
+      summary: Mark attendance for all students of a group on a session day
+      description: |
+        Upserts one attendance record per entry, keyed by `(enrollment, date)`. Re-posting the
+        same `(group, date, enrollment)` with a different status updates the existing record —
+        it never creates duplicates.
+
+        **Validation:**
+        - The date's weekday must be listed in the group's `schedule.days`, otherwise returns `400 invalidSessionDate`.
+        - Each `entries[i].enrollment` must belong to the specified group.
+
+        **Access:** Teacher only, and only for groups where they are the assigned teacher.
+      operationId: bulkMarkAttendance
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttendanceBulkInput"
+            examples:
+              markSession:
+                summary: Mark a Monday session
+                value:
+                  group: "664f1a2b3c4d5e6f7a8b9c10"
+                  date: "2026-04-13"
+                  entries:
+                    - enrollment: "664f1a2b3c4d5e6f7a8b9c20"
+                      status: "present"
+                    - enrollment: "664f1a2b3c4d5e6f7a8b9c21"
+                      status: "absent"
+                      note: "Kasal"
+      responses:
+        "201":
+          description: Attendance marked (or updated on re-post)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attendance:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Attendance"
+                  code:
+                    type: string
+                    example: "attendanceMarked"
+                  message:
+                    type: string
+                    example: "Davomat belgilandi"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missingGroup:
+                  value: { code: "missingField", message: "Guruh kiritilishi shart" }
+                missingDate:
+                  value: { code: "missingField", message: "Sana kiritilishi shart" }
+                emptyEntries:
+                  value: { code: "missingField", message: "Davomat ro'yxati bo'sh" }
+                invalidDate:
+                  value: { code: "invalidSessionDate", message: "Tanlangan sana guruh jadvaliga mos kelmaydi" }
+                enrollmentNotInGroup:
+                  value: { code: "enrollmentNotInGroup", message: "Bu o'quvchi bu guruhga tegishli emas" }
+                invalidStatus:
+                  value: { code: "invalidStatus", message: "Status noto'g'ri" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Authenticated user is not the teacher of this group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "notGroupTeacher"
+                message: "Siz bu guruhning o'qituvchisi emassiz"
+        "404":
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "groupNotFound"
+                message: "Guruh topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /attendance/{id}:
+    put:
+      tags: [Attendance]
+      summary: Update a single attendance record
+      description: |
+        Updates `status` and/or `note` for one existing attendance record. `markedBy` is
+        automatically set to the authenticated teacher.
+
+        **Access:** Teacher only, and only for records that belong to their own group.
+      operationId: updateAttendance
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/attendanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttendanceUpdateInput"
+            examples:
+              flipToAbsent:
+                summary: Change status to absent with a note
+                value:
+                  status: "absent"
+                  note: "Kasal"
+      responses:
+        "200":
+          description: Attendance updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attendance:
+                    $ref: "#/components/schemas/Attendance"
+                  code:
+                    type: string
+                    example: "attendanceUpdated"
+                  message:
+                    type: string
+                    example: "Davomat yangilandi"
+        "400":
+          description: Invalid status value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "invalidStatus"
+                message: "Status noto'g'ri"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Authenticated user is not the teacher of this record's group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "notGroupTeacher"
+                message: "Siz bu guruhning o'qituvchisi emassiz"
+        "404":
+          description: Attendance record not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "attendanceNotFound"
+                message: "Davomat topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    delete:
+      tags: [Attendance]
+      summary: Delete an attendance record
+      description: |
+        Permanently deletes a single attendance record.
+
+        **Access:** Admin only.
+      operationId: deleteAttendance
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/attendanceId"
+      responses:
+        "200":
+          description: Attendance deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+              example:
+                code: "attendanceDeleted"
+                message: "Davomat o'chirildi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Attendance record not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "attendanceNotFound"
+                message: "Davomat topilmadi"
         "429":
           $ref: "#/components/responses/TooManyRequests"
