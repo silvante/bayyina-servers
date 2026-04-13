@@ -129,7 +129,7 @@ const createPayment = async (req, res, next) => {
 
     // Chegirmani hisobga olgan holda samarali oylik to'lovni hisoblash
     const monthlyFee = enrollmentDoc.group?.price ?? 0;
-    const effectiveFee = Math.max(0, monthlyFee - (enrollmentDoc.discount || 0));
+    const effectiveFee = Math.max(0, monthlyFee - (enrollmentDoc.discount || 0)) - (enrollmentDoc.debt || 0);
 
     // Mavjud balans + yangi to'lov
     const totalAvailable = (enrollmentDoc.balance || 0) + amount;
