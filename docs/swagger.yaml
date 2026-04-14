@@ -50,6 +50,11 @@ tags:
     description: Payment management — record and track monthly payments for enrolled students
   - name: Attendance
     description: Attendance tracking — mark student presence on group session days (per the group's weekly schedule)
+  - name: Leads
+    description: |
+      Lead management — track prospective students who showed interest but haven't enrolled yet.
+      Leads have a unique referral link for attribution, a follow-up status, and optional scheduling.
+      When a lead converts, flip `status` to `converted` and create an `Enrollment` via `POST /enrollments`.
 
 # ─────────────────────────────────────────────
 # Security scheme
@@ -916,6 +921,272 @@ components:
           nullable: true
           example: "2026-04-13T10:00:00.000Z"
 
+    # ── Lead ─────────────────────────────────────
+    Lead:
+      type: object
+      description: A prospective student — pre-enrollment record with contact info, source attribution, and follow-up status.
+      properties:
+        _id:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c50"
+        firstName:
+          type: string
+          description: Lead's first name (required)
+          example: "Ali"
+        phone:
+          type: integer
+          nullable: true
+          description: Uzbek phone number (9 digits after country code)
+          example: 998901234567
+        telegramId:
+          type: string
+          nullable: true
+          description: Telegram numeric user ID. Unique across all leads when set.
+          example: "123456789"
+        gender:
+          type: string
+          enum: [male, female]
+          nullable: true
+          example: "male"
+        age:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 120
+          example: 19
+        profession:
+          type: string
+          nullable: true
+          description: Current profession or occupation
+          example: "Student"
+        source:
+          type: string
+          enum: [telegram, instagram, referral, offline, other]
+          default: other
+          description: How the lead found out about the center
+          example: "instagram"
+        interest:
+          type: string
+          nullable: true
+          description: Free-text note of what the lead is interested in
+          example: "English evening course"
+        uniqueLink:
+          type: string
+          description: Auto-generated slug (12 hex chars) for referral-click tracking. Returned on create; immutable.
+          example: "a1b2c3d4e5f6"
+        linkClickedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of the first time the referral link was hit. Null until clicked.
+          example: "2026-04-14T10:15:00.000Z"
+        group:
+          oneOf:
+            - type: string
+              nullable: true
+            - type: object
+              properties:
+                _id:
+                  type: string
+                  example: "664f1a2b3c4d5e6f7a8b9c10"
+                name:
+                  type: string
+                  example: "English — Oqshom 1"
+                price:
+                  type: number
+                  example: 450000
+          description: Populated group the lead is interested in (optional)
+        level:
+          type: string
+          nullable: true
+          description: Desired level (free-text, e.g. "A1", "beginner")
+          example: "A1"
+        status:
+          type: string
+          enum: [new, contacted, interested, scheduled, converted, rejected]
+          default: new
+          description: |
+            Follow-up status:
+            - `new` — just came in
+            - `contacted` — reached out
+            - `interested` — engaged in conversation
+            - `scheduled` — meeting/call booked (see `scheduledAt`)
+            - `converted` — became a student (create Enrollment separately)
+            - `rejected` — declined (see `rejectionReason`)
+          example: "contacted"
+        rejectionReason:
+          type: string
+          nullable: true
+          description: Why the lead was rejected (required context when `status = rejected`)
+          example: "Narx juda qimmat"
+        paymentStatus:
+          type: string
+          enum: [unpaid, partial, paid]
+          default: unpaid
+          description: Whether any deposit/payment has been collected from this lead yet
+          example: "unpaid"
+        scheduledAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Planned call/meeting timestamp
+          example: "2026-04-20T14:00:00.000Z"
+        lastActivityAt:
+          type: string
+          format: date-time
+          description: Auto-bumped on any update or link-click
+          example: "2026-04-14T10:15:00.000Z"
+        notes:
+          type: string
+          nullable: true
+          description: Free-text admin notes
+          example: "Onasi qo'ng'iroq qildi, Payshanba kuni javob beramiz"
+        createdBy:
+          oneOf:
+            - type: string
+              nullable: true
+            - type: object
+              properties:
+                _id:
+                  type: string
+                  example: "664f1a2b3c4d5e6f7a8b9c0f"
+                firstName:
+                  type: string
+                  example: "Sarvinoz"
+                lastName:
+                  type: string
+                  example: "Yusupova"
+          description: Admin/teacher who created the lead record
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-04-14T09:00:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-04-14T10:15:00.000Z"
+
+    LeadInput:
+      type: object
+      required: [firstName]
+      description: |
+        Input for creating a lead. Only `firstName` is required.
+        `uniqueLink`, `lastActivityAt`, `createdBy`, and timestamps are set by the server.
+      properties:
+        firstName:
+          type: string
+          example: "Ali"
+        phone:
+          type: integer
+          example: 998901234567
+        telegramId:
+          type: string
+          example: "123456789"
+        gender:
+          type: string
+          enum: [male, female]
+          example: "male"
+        age:
+          type: integer
+          minimum: 1
+          maximum: 120
+          example: 19
+        profession:
+          type: string
+          example: "Student"
+        source:
+          type: string
+          enum: [telegram, instagram, referral, offline, other]
+          default: other
+          example: "telegram"
+        interest:
+          type: string
+          example: "English evening course"
+        group:
+          type: string
+          description: ObjectId of the Group the lead is interested in
+          example: "664f1a2b3c4d5e6f7a8b9c10"
+        level:
+          type: string
+          example: "A1"
+        status:
+          type: string
+          enum: [new, contacted, interested, scheduled, converted, rejected]
+          default: new
+          example: "new"
+        rejectionReason:
+          type: string
+          example: "Narx qimmat"
+        paymentStatus:
+          type: string
+          enum: [unpaid, partial, paid]
+          default: unpaid
+          example: "unpaid"
+        scheduledAt:
+          type: string
+          format: date-time
+          example: "2026-04-20T14:00:00.000Z"
+        notes:
+          type: string
+          example: "Telegram bot orqali kelgan"
+
+    LeadUpdateInput:
+      type: object
+      description: |
+        All fields are optional. Partial update — only provided fields are changed.
+        `lastActivityAt` is automatically bumped to the current time on every update.
+      properties:
+        firstName:
+          type: string
+          example: "Ali"
+        phone:
+          type: integer
+          example: 998901234567
+        telegramId:
+          type: string
+          example: "123456789"
+        gender:
+          type: string
+          enum: [male, female]
+          example: "female"
+        age:
+          type: integer
+          example: 20
+        profession:
+          type: string
+          example: "Engineer"
+        source:
+          type: string
+          enum: [telegram, instagram, referral, offline, other]
+          example: "referral"
+        interest:
+          type: string
+          example: "Korean A1 morning"
+        group:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c10"
+        level:
+          type: string
+          example: "B1"
+        status:
+          type: string
+          enum: [new, contacted, interested, scheduled, converted, rejected]
+          example: "scheduled"
+        rejectionReason:
+          type: string
+          example: "Boshqa markazni tanladi"
+        paymentStatus:
+          type: string
+          enum: [unpaid, partial, paid]
+          example: "partial"
+        scheduledAt:
+          type: string
+          format: date-time
+          example: "2026-04-22T10:00:00.000Z"
+        notes:
+          type: string
+          example: "Onasi qayta qo'ng'iroq qiladi"
+
     # ── Pagination ───────────────────────────────
     PaginationMeta:
       type: object
@@ -1036,6 +1307,24 @@ components:
       schema:
         type: string
         example: "664f1a2b3c4d5e6f7a8b9c40"
+
+    leadId:
+      name: id
+      in: path
+      required: true
+      description: MongoDB ObjectId of the lead
+      schema:
+        type: string
+        example: "664f1a2b3c4d5e6f7a8b9c50"
+
+    leadUniqueLink:
+      name: uniqueLink
+      in: path
+      required: true
+      description: The lead's auto-generated 12-char hex slug
+      schema:
+        type: string
+        example: "a1b2c3d4e5f6"
 
     pageParam:
       name: page
@@ -3162,5 +3451,413 @@ paths:
               example:
                 code: "attendanceNotFound"
                 message: "Davomat topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ══════════════════════════════════════════
+  # LEADS
+  # ══════════════════════════════════════════
+
+  /leads:
+    get:
+      tags: [Leads]
+      summary: List leads
+      description: |
+        Returns a paginated, filterable list of leads populated with `group` and `createdBy`.
+
+        **Access:** Admin, Teacher.
+
+        Sorted by `createdAt` descending (newest first).
+
+        The `search` query is a case-insensitive substring match against `firstName`.
+        If the search term parses as a number, it is also matched against `phone` exactly.
+      operationId: getLeads
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/pageParam"
+        - $ref: "#/components/parameters/limitParam"
+        - name: status
+          in: query
+          description: Filter by follow-up status
+          schema:
+            type: string
+            enum: [new, contacted, interested, scheduled, converted, rejected]
+            example: "new"
+        - name: source
+          in: query
+          description: Filter by acquisition source
+          schema:
+            type: string
+            enum: [telegram, instagram, referral, offline, other]
+            example: "telegram"
+        - name: group
+          in: query
+          description: Filter by interested-in Group ObjectId
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c10"
+        - name: paymentStatus
+          in: query
+          description: Filter by deposit/payment status
+          schema:
+            type: string
+            enum: [unpaid, partial, paid]
+            example: "unpaid"
+        - name: search
+          in: query
+          description: Search by `firstName` (substring, case-insensitive) or exact `phone`
+          schema:
+            type: string
+            example: "ali"
+      responses:
+        "200":
+          description: Leads returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  leads:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Lead"
+                  total:
+                    type: integer
+                    example: 37
+                  page:
+                    type: integer
+                    example: 1
+                  limit:
+                    type: integer
+                    example: 20
+                  totalPages:
+                    type: integer
+                    example: 2
+                  hasNextPage:
+                    type: boolean
+                    example: true
+                  hasPrevPage:
+                    type: boolean
+                    example: false
+                  code:
+                    type: string
+                    example: "leadsFound"
+                  message:
+                    type: string
+                    example: "Murojaatlar ro'yxati olindi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    post:
+      tags: [Leads]
+      summary: Create a lead
+      description: |
+        Creates a new lead record.
+
+        **Access:** Admin, Teacher.
+
+        The server:
+        - Generates a unique `uniqueLink` (12-char hex slug) used for referral-click tracking.
+        - Sets `createdBy` to the caller's user ID.
+        - Sets `lastActivityAt` to the creation time.
+
+        Only `firstName` is required. `telegramId` must be unique across leads when provided.
+      operationId: createLead
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadInput"
+            examples:
+              minimal:
+                summary: Minimal lead (firstName only)
+                value:
+                  firstName: "Ali"
+              telegramBot:
+                summary: Lead coming from Telegram bot
+                value:
+                  firstName: "Ali"
+                  phone: 998901234567
+                  telegramId: "123456789"
+                  source: "telegram"
+                  interest: "English evening course"
+              withGroupInterest:
+                summary: Lead with a target group + scheduled call
+                value:
+                  firstName: "Malika"
+                  phone: 998977776655
+                  source: "instagram"
+                  group: "664f1a2b3c4d5e6f7a8b9c10"
+                  level: "A1"
+                  status: "scheduled"
+                  scheduledAt: "2026-04-20T14:00:00.000Z"
+                  notes: "Onasi qo'ng'iroq qildi"
+      responses:
+        "201":
+          description: Lead created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lead:
+                    $ref: "#/components/schemas/Lead"
+                  code:
+                    type: string
+                    example: "leadCreated"
+                  message:
+                    type: string
+                    example: "Yangi murojaat yaratildi"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missingFirstName:
+                  value: { code: "missingField", message: "Ism kiritilishi shart" }
+                invalidStatus:
+                  value: { code: "invalidLeadStatus", message: "Murojaat holati noto'g'ri" }
+                invalidSource:
+                  value: { code: "invalidField", message: "Manba noto'g'ri" }
+                invalidPaymentStatus:
+                  value: { code: "invalidField", message: "To'lov holati noto'g'ri" }
+                invalidGender:
+                  value: { code: "invalidField", message: "Jins noto'g'ri" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /leads/track/{uniqueLink}:
+    get:
+      tags: [Leads]
+      summary: Track a referral-link click (public)
+      description: |
+        **Public endpoint — no authentication required.**
+
+        Records that the lead's unique referral link was hit. On first call, sets `linkClickedAt`
+        to the current time; every call bumps `lastActivityAt`.
+
+        Intended for use from a Telegram bot, ad redirect, or landing page — anywhere the lead
+        physically clicks their unique URL. The slug is long and random, so guessing another lead's
+        link is not practical.
+
+        Returns `204 No Content` on success (no response body).
+      operationId: trackLeadClick
+      parameters:
+        - $ref: "#/components/parameters/leadUniqueLink"
+      responses:
+        "204":
+          description: Click recorded (no body)
+        "404":
+          description: Lead not found for this uniqueLink
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "leadNotFound"
+                message: "Murojaat topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /leads/{id}:
+    get:
+      tags: [Leads]
+      summary: Get a lead by ID
+      description: |
+        Returns a single lead populated with `group` (name, price, teacher) and `createdBy` (firstName, lastName).
+
+        **Access:** Admin, Teacher.
+      operationId: getLead
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/leadId"
+      responses:
+        "200":
+          description: Lead found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lead:
+                    $ref: "#/components/schemas/Lead"
+                  code:
+                    type: string
+                    example: "leadsFound"
+                  message:
+                    type: string
+                    example: "Murojaatlar ro'yxati olindi"
+        "400":
+          description: Invalid ObjectId
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "invalidId"
+                message: "Id noto'g'ri kiritildi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Lead not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "leadNotFound"
+                message: "Murojaat topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    put:
+      tags: [Leads]
+      summary: Update a lead
+      description: |
+        Partial update — only provided fields are changed. `lastActivityAt` is auto-bumped.
+
+        **Access:** Admin, Teacher.
+
+        **Typical flows:**
+        - `{ "status": "contacted", "notes": "qo'ng'iroq qildim" }` — log a follow-up call.
+        - `{ "status": "scheduled", "scheduledAt": "2026-04-20T14:00:00Z" }` — book a meeting.
+        - `{ "status": "rejected", "rejectionReason": "Narx qimmat" }` — close the lead.
+        - `{ "status": "converted" }` — mark as won; then create the `Enrollment` via `POST /enrollments`.
+      operationId: updateLead
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/leadId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadUpdateInput"
+            examples:
+              markContacted:
+                summary: Log first contact
+                value:
+                  status: "contacted"
+                  notes: "Birinchi marta qo'ng'iroq qildim"
+              scheduleMeeting:
+                summary: Book a scheduled call
+                value:
+                  status: "scheduled"
+                  scheduledAt: "2026-04-20T14:00:00.000Z"
+              rejectLead:
+                summary: Close as rejected
+                value:
+                  status: "rejected"
+                  rejectionReason: "Narx juda qimmat"
+              convertLead:
+                summary: Flip to converted (then create Enrollment separately)
+                value:
+                  status: "converted"
+                  paymentStatus: "paid"
+      responses:
+        "200":
+          description: Lead updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lead:
+                    $ref: "#/components/schemas/Lead"
+                  code:
+                    type: string
+                    example: "leadUpdated"
+                  message:
+                    type: string
+                    example: "Murojaat yangilandi"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalidStatus:
+                  value: { code: "invalidLeadStatus", message: "Murojaat holati noto'g'ri" }
+                invalidSource:
+                  value: { code: "invalidField", message: "Manba noto'g'ri" }
+                invalidPaymentStatus:
+                  value: { code: "invalidField", message: "To'lov holati noto'g'ri" }
+                invalidGender:
+                  value: { code: "invalidField", message: "Jins noto'g'ri" }
+                invalidId:
+                  value: { code: "invalidId", message: "Id noto'g'ri kiritildi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Lead not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "leadNotFound"
+                message: "Murojaat topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    delete:
+      tags: [Leads]
+      summary: Delete a lead
+      description: |
+        Permanently deletes a lead record.
+
+        **Access:** Admin only.
+
+        > Prefer flipping `status` to `rejected` or `converted` instead of deleting —
+        > deletion loses source-attribution history.
+      operationId: deleteLead
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/leadId"
+      responses:
+        "200":
+          description: Lead deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+              example:
+                code: "leadDeleted"
+                message: "Murojaat o'chirildi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Lead not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "leadNotFound"
+                message: "Murojaat topilmadi"
         "429":
           $ref: "#/components/responses/TooManyRequests"

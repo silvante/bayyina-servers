@@ -51,6 +51,14 @@ const texts = {
   enrollmentNotInGroup: "Bu o'quvchi bu guruhga tegishli emas",
   missingField: "Majburiy maydon to'ldirilmagan",
 
+  // Leads
+  leadCreated: "Yangi murojaat yaratildi",
+  leadUpdated: "Murojaat yangilandi",
+  leadDeleted: "Murojaat o'chirildi",
+  leadNotFound: "Murojaat topilmadi",
+  leadsFound: "Murojaatlar ro'yxati olindi",
+  invalidLeadStatus: "Murojaat holati noto'g'ri",
+
   // Payments
   paymentCreated: "To'lov muvaffaqiyatli yaratildi",
   paymentUpdated: "To'lov muvaffaqiyatli yangilandi",

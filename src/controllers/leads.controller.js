@@ -1,0 +1,224 @@
+const crypto = require("crypto");
+const texts = require("../data/texts");
+const {
+  getPagination,
+  buildPaginationMeta,
+  pickAllowedFields,
+} = require("../utils/helpers");
+const Lead = require("../models/Lead");
+
+const ALLOWED_STATUSES = ["new", "contacted", "interested", "scheduled", "converted", "rejected"];
+const ALLOWED_SOURCES = ["telegram", "instagram", "referral", "offline", "other"];
+const ALLOWED_PAYMENT_STATUSES = ["unpaid", "partial", "paid"];
+const ALLOWED_GENDERS = ["male", "female"];
+
+const UPDATABLE_FIELDS = [
+  "firstName",
+  "phone",
+  "telegramId",
+  "gender",
+  "age",
+  "profession",
+  "source",
+  "interest",
+  "group",
+  "level",
+  "status",
+  "rejectionReason",
+  "paymentStatus",
+  "scheduledAt",
+  "notes",
+];
+
+const generateUniqueLink = async () => {
+  for (let i = 0; i < 5; i++) {
+    const slug = crypto.randomBytes(6).toString("hex");
+    const exists = await Lead.exists({ uniqueLink: slug });
+    if (!exists) return slug;
+  }
+  return crypto.randomBytes(12).toString("hex");
+};
+
+// GET /leads
+const getLeads = async (req, res, next) => {
+  try {
+    const { page, limit, skip } = getPagination(req.query);
+    const filter = {};
+
+    if (req.query.status) filter.status = req.query.status;
+    if (req.query.source) filter.source = req.query.source;
+    if (req.query.group) filter.group = req.query.group;
+    if (req.query.paymentStatus) filter.paymentStatus = req.query.paymentStatus;
+
+    if (req.query.search) {
+      const term = String(req.query.search).trim();
+      if (term) {
+        const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+        const orClauses = [{ firstName: regex }];
+        const asNumber = Number(term);
+        if (!Number.isNaN(asNumber)) orClauses.push({ phone: asNumber });
+        filter.$or = orClauses;
+      }
+    }
+
+    const [leads, total] = await Promise.all([
+      Lead.find(filter)
+        .populate({ path: "group", select: "name price" })
+        .populate({ path: "createdBy", select: "firstName lastName" })
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 }),
+      Lead.countDocuments(filter),
+    ]);
+
+    res.json({
+      leads,
+      ...buildPaginationMeta(total, page, limit),
+      code: "leadsFound",
+      message: texts.leadsFound,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /leads/:id
+const getLead = async (req, res, next) => {
+  try {
+    const lead = await Lead.findById(req.params.id)
+      .populate({ path: "group", select: "name price teacher" })
+      .populate({ path: "createdBy", select: "firstName lastName" });
+
+    if (!lead) {
+      return res.status(404).json({ code: "leadNotFound", message: texts.leadNotFound });
+    }
+
+    res.json({ lead, code: "leadsFound", message: texts.leadsFound });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /leads
+const createLead = async (req, res, next) => {
+  const { firstName } = req.body;
+
+  if (!firstName || !String(firstName).trim()) {
+    return res.status(400).json({ code: "missingField", message: "Ism kiritilishi shart" });
+  }
+
+  const payload = pickAllowedFields(req.body, UPDATABLE_FIELDS);
+
+  if (payload.status && !ALLOWED_STATUSES.includes(payload.status)) {
+    return res.status(400).json({ code: "invalidLeadStatus", message: texts.invalidLeadStatus });
+  }
+  if (payload.source && !ALLOWED_SOURCES.includes(payload.source)) {
+    return res.status(400).json({ code: "invalidField", message: "Manba noto'g'ri" });
+  }
+  if (payload.paymentStatus && !ALLOWED_PAYMENT_STATUSES.includes(payload.paymentStatus)) {
+    return res.status(400).json({ code: "invalidField", message: "To'lov holati noto'g'ri" });
+  }
+  if (payload.gender && !ALLOWED_GENDERS.includes(payload.gender)) {
+    return res.status(400).json({ code: "invalidField", message: "Jins noto'g'ri" });
+  }
+  if (payload.scheduledAt) payload.scheduledAt = new Date(payload.scheduledAt);
+
+  try {
+    const uniqueLink = await generateUniqueLink();
+    const now = new Date();
+
+    const lead = await Lead.create({
+      ...payload,
+      uniqueLink,
+      lastActivityAt: now,
+      createdBy: req.user?._id,
+    });
+
+    const populated = await lead.populate([
+      { path: "group", select: "name price" },
+      { path: "createdBy", select: "firstName lastName" },
+    ]);
+
+    res.status(201).json({ lead: populated, code: "leadCreated", message: texts.leadCreated });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// PUT /leads/:id
+const updateLead = async (req, res, next) => {
+  try {
+    const updates = pickAllowedFields(req.body, UPDATABLE_FIELDS);
+
+    if (updates.status && !ALLOWED_STATUSES.includes(updates.status)) {
+      return res.status(400).json({ code: "invalidLeadStatus", message: texts.invalidLeadStatus });
+    }
+    if (updates.source && !ALLOWED_SOURCES.includes(updates.source)) {
+      return res.status(400).json({ code: "invalidField", message: "Manba noto'g'ri" });
+    }
+    if (updates.paymentStatus && !ALLOWED_PAYMENT_STATUSES.includes(updates.paymentStatus)) {
+      return res.status(400).json({ code: "invalidField", message: "To'lov holati noto'g'ri" });
+    }
+    if (updates.gender && !ALLOWED_GENDERS.includes(updates.gender)) {
+      return res.status(400).json({ code: "invalidField", message: "Jins noto'g'ri" });
+    }
+    if (updates.scheduledAt) updates.scheduledAt = new Date(updates.scheduledAt);
+
+    updates.lastActivityAt = new Date();
+
+    const lead = await Lead.findByIdAndUpdate(req.params.id, updates, { new: true })
+      .populate({ path: "group", select: "name price" })
+      .populate({ path: "createdBy", select: "firstName lastName" });
+
+    if (!lead) {
+      return res.status(404).json({ code: "leadNotFound", message: texts.leadNotFound });
+    }
+
+    res.json({ lead, code: "leadUpdated", message: texts.leadUpdated });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// DELETE /leads/:id
+const deleteLead = async (req, res, next) => {
+  try {
+    const lead = await Lead.findByIdAndDelete(req.params.id);
+    if (!lead) {
+      return res.status(404).json({ code: "leadNotFound", message: texts.leadNotFound });
+    }
+    res.json({ code: "leadDeleted", message: texts.leadDeleted });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /leads/track/:uniqueLink — public
+const trackLeadClick = async (req, res, next) => {
+  try {
+    const { uniqueLink } = req.params;
+    const now = new Date();
+
+    const lead = await Lead.findOne({ uniqueLink });
+    if (!lead) {
+      return res.status(404).json({ code: "leadNotFound", message: texts.leadNotFound });
+    }
+
+    if (!lead.linkClickedAt) lead.linkClickedAt = now;
+    lead.lastActivityAt = now;
+    await lead.save();
+
+    return res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = {
+  getLeads,
+  getLead,
+  createLead,
+  updateLead,
+  deleteLead,
+  trackLeadClick,
+};
