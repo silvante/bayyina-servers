@@ -65,6 +65,19 @@ const texts = {
   paymentNotFound: "To'lov topilmadi",
   paymentsFound: "To'lovlar ro'yxati olindi",
 
+  // Notifications
+  notificationCreated: "Xabar muvaffaqiyatli yuborildi",
+  notificationUpdated: "Xabar yangilandi",
+  notificationDeleted: "Xabar o'chirildi",
+  notificationNotFound: "Xabar topilmadi",
+  notificationsFound: "Xabarlar ro'yxati olindi",
+  notEnrolledInGroup: "Siz bu guruhga a'zo emassiz",
+  feedbackAdded: "Javob qo'shildi",
+  feedbackUpdated: "Javob yangilandi",
+  feedbackDeleted: "Javob o'chirildi",
+  feedbackNotFound: "Javob topilmadi",
+  notFeedbackAuthor: "Siz bu javobning muallifi emassiz",
+
   // General
   serverError: "Serverda ichki xatolik",
   tooManyRequests: "Juda ko'p so'rovlar. Iltimos, 3 daqiqadan keyin urinib ko'ring",

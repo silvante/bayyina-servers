@@ -55,6 +55,13 @@ tags:
       Lead management — track prospective students who showed interest but haven't enrolled yet.
       Leads have a unique referral link for attribution, a follow-up status, and optional scheduling.
       When a lead converts, flip `status` to `converted` and create an `Enrollment` via `POST /enrollments`.
+  - name: Notifications
+    description: |
+      Notifications — students send messages tied to a group they are enrolled in (complaint,
+      suggestion, question, other). Teachers see only notifications for groups they teach;
+      admins see everything. Staff reply via an embedded `feedback` array on each notification
+      (no separate module). The `role` of each feedback entry is always set by the server from
+      the authenticated user's role and never trusted from the client.
 
 # ─────────────────────────────────────────────
 # Security scheme
@@ -1187,6 +1194,139 @@ components:
           type: string
           example: "Onasi qayta qo'ng'iroq qiladi"
 
+    # ── Notification ─────────────────────────────
+    NotificationFeedback:
+      type: object
+      description: |
+        Single reply entry embedded inside a notification's `feedback` array.
+        The `role` is assigned by the server from the authenticated user's role at write time.
+      properties:
+        _id:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c20"
+        role:
+          type: string
+          enum: [teacher, admin]
+          example: "teacher"
+        author:
+          oneOf:
+            - type: string
+              example: "664f1a2b3c4d5e6f7a8b9c0d"
+            - type: object
+              properties:
+                _id:
+                  type: string
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                role:
+                  type: string
+        message:
+          type: string
+          example: "Qayd etildi, bugun o'qituvchi bilan gaplashamiz"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Notification:
+      type: object
+      description: Notification sent by a student, tied to a group, with an embedded feedback thread
+      properties:
+        _id:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c30"
+        group:
+          oneOf:
+            - type: string
+              example: "664f1a2b3c4d5e6f7a8b9c10"
+            - type: object
+              properties:
+                _id:
+                  type: string
+                name:
+                  type: string
+        sender:
+          oneOf:
+            - type: string
+              example: "664f1a2b3c4d5e6f7a8b9c0d"
+            - type: object
+              properties:
+                _id:
+                  type: string
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                phone:
+                  type: integer
+                role:
+                  type: string
+        title:
+          type: string
+          example: "Xona juda sovuq"
+        message:
+          type: string
+          example: "Iltimos, isitgichni yoqsangiz"
+        type:
+          type: string
+          enum: [complaint, suggestion, question, other]
+          example: "complaint"
+        status:
+          type: string
+          enum: [open, in_progress, resolved]
+          example: "open"
+        feedback:
+          type: array
+          items:
+            $ref: "#/components/schemas/NotificationFeedback"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    NotificationInput:
+      type: object
+      required: [group, title, message]
+      properties:
+        group:
+          type: string
+          description: Group ObjectId. The student must be enrolled in this group.
+          example: "664f1a2b3c4d5e6f7a8b9c10"
+        title:
+          type: string
+          example: "Xona juda sovuq"
+        message:
+          type: string
+          example: "Iltimos, isitgichni yoqsangiz"
+        type:
+          type: string
+          enum: [complaint, suggestion, question, other]
+          default: "other"
+          example: "complaint"
+
+    NotificationStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [open, in_progress, resolved]
+          example: "in_progress"
+
+    NotificationFeedbackInput:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          example: "Qayd etildi, bugun o'qituvchi bilan gaplashamiz"
+
     # ── Pagination ───────────────────────────────
     PaginationMeta:
       type: object
@@ -1325,6 +1465,24 @@ components:
       schema:
         type: string
         example: "a1b2c3d4e5f6"
+
+    notificationId:
+      name: id
+      in: path
+      required: true
+      description: MongoDB ObjectId of the notification
+      schema:
+        type: string
+        example: "664f1a2b3c4d5e6f7a8b9c30"
+
+    notificationFeedbackId:
+      name: feedbackId
+      in: path
+      required: true
+      description: MongoDB ObjectId of the feedback entry inside the notification's `feedback` array
+      schema:
+        type: string
+        example: "664f1a2b3c4d5e6f7a8b9c20"
 
     pageParam:
       name: page
@@ -3859,5 +4017,512 @@ paths:
               example:
                 code: "leadNotFound"
                 message: "Murojaat topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ══════════════════════════════════════════
+  # NOTIFICATIONS
+  # ══════════════════════════════════════════
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List notifications
+      description: |
+        Returns a paginated, filterable list of notifications populated with `sender`, `group`,
+        and `feedback.author`.
+
+        **Access:**
+        - `admin` — sees every notification.
+        - `teacher` — sees only notifications whose `group` is one they teach. If a `group`
+          query filter is passed for a group they do not teach, responds `403 forbidden`.
+        - `student` — sees only notifications they themselves sent.
+
+        Sorted by `createdAt` descending (newest first).
+      operationId: getNotifications
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/pageParam"
+        - $ref: "#/components/parameters/limitParam"
+        - name: status
+          in: query
+          description: Filter by notification status
+          schema:
+            type: string
+            enum: [open, in_progress, resolved]
+        - name: type
+          in: query
+          description: Filter by notification type
+          schema:
+            type: string
+            enum: [complaint, suggestion, question, other]
+        - name: group
+          in: query
+          description: Filter by group ObjectId
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c10"
+      responses:
+        "200":
+          description: Notifications returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Notification"
+                  total:
+                    type: integer
+                    example: 12
+                  page:
+                    type: integer
+                    example: 1
+                  limit:
+                    type: integer
+                    example: 20
+                  totalPages:
+                    type: integer
+                    example: 1
+                  hasNextPage:
+                    type: boolean
+                    example: false
+                  hasPrevPage:
+                    type: boolean
+                    example: false
+                  code:
+                    type: string
+                    example: "notificationsFound"
+                  message:
+                    type: string
+                    example: "Xabarlar ro'yxati olindi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    post:
+      tags: [Notifications]
+      summary: Create a notification
+      description: |
+        Creates a new notification tied to a group.
+
+        **Access:** Student only. The student must be enrolled in `group`; otherwise
+        responds `403 notEnrolledInGroup`.
+
+        The server sets `sender` to the caller's user ID, `status` to `open`, and starts
+        `feedback` as an empty array.
+      operationId: createNotification
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationInput"
+            examples:
+              complaint:
+                summary: Complaint about the classroom
+                value:
+                  group: "664f1a2b3c4d5e6f7a8b9c10"
+                  title: "Xona juda sovuq"
+                  message: "Iltimos, isitgichni yoqsangiz"
+                  type: "complaint"
+              question:
+                summary: Question without a type
+                value:
+                  group: "664f1a2b3c4d5e6f7a8b9c10"
+                  title: "Dars vaqti o'zgaradimi?"
+                  message: "Ertaga dars bo'ladimi?"
+      responses:
+        "201":
+          description: Notification created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notification:
+                    $ref: "#/components/schemas/Notification"
+                  code:
+                    type: string
+                    example: "notificationCreated"
+                  message:
+                    type: string
+                    example: "Xabar muvaffaqiyatli yuborildi"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missingGroup:
+                  value: { code: "missingField", message: "Guruh kiritilishi shart" }
+                missingTitle:
+                  value: { code: "missingField", message: "Sarlavha kiritilishi shart" }
+                missingMessage:
+                  value: { code: "missingField", message: "Xabar matni kiritilishi shart" }
+                invalidType:
+                  value: { code: "invalidField", message: "Xabar turi noto'g'ri" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Not a student, or student not enrolled in the group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  value: { code: "forbidden", message: "Ruxsat berilmadi" }
+                notEnrolledInGroup:
+                  value: { code: "notEnrolledInGroup", message: "Siz bu guruhga a'zo emassiz" }
+        "404":
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "groupNotFound"
+                message: "Guruh topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /notifications/{id}:
+    get:
+      tags: [Notifications]
+      summary: Get a single notification
+      description: |
+        Returns the notification with its populated sender, group, and `feedback.author`.
+
+        **Access:**
+        - `admin` — any notification.
+        - `teacher` — only if they teach the notification's `group`.
+        - `student` — only if they are the `sender`.
+      operationId: getNotification
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/notificationId"
+      responses:
+        "200":
+          description: Notification returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notification:
+                    $ref: "#/components/schemas/Notification"
+                  code:
+                    type: string
+                    example: "notificationsFound"
+                  message:
+                    type: string
+                    example: "Xabarlar ro'yxati olindi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "notificationNotFound"
+                message: "Xabar topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    delete:
+      tags: [Notifications]
+      summary: Delete a notification
+      description: |
+        Permanently deletes a notification and its embedded feedback thread.
+
+        **Access:** Admin only. Students cannot delete notifications they have sent
+        (preserves audit trail); teachers cannot delete either.
+      operationId: deleteNotification
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/notificationId"
+      responses:
+        "200":
+          description: Notification deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+              example:
+                code: "notificationDeleted"
+                message: "Xabar o'chirildi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "notificationNotFound"
+                message: "Xabar topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /notifications/{id}/status:
+    patch:
+      tags: [Notifications]
+      summary: Update notification status
+      description: |
+        Moves a notification through the workflow: `open` → `in_progress` → `resolved`.
+
+        **Access:** Admin, or the teacher of the notification's group. Students cannot
+        change status.
+      operationId: updateNotificationStatus
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/notificationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationStatusInput"
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notification:
+                    $ref: "#/components/schemas/Notification"
+                  code:
+                    type: string
+                    example: "notificationUpdated"
+                  message:
+                    type: string
+                    example: "Xabar yangilandi"
+        "400":
+          description: Invalid status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "invalidField"
+                message: "Holat noto'g'ri"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "notificationNotFound"
+                message: "Xabar topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /notifications/{id}/feedback:
+    post:
+      tags: [Notifications]
+      summary: Add a feedback entry to a notification
+      description: |
+        Appends a reply to the notification's embedded `feedback` array.
+
+        **Access:** Admin, or the teacher of the notification's group.
+
+        The server sets the entry's `role` from the caller's user role (`admin` or `teacher`)
+        and `author` to the caller's user ID. The client never sets `role` — this is what
+        guarantees each reply is clearly attributable to a teacher or an admin.
+      operationId: addNotificationFeedback
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/notificationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationFeedbackInput"
+      responses:
+        "201":
+          description: Feedback added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notification:
+                    $ref: "#/components/schemas/Notification"
+                  code:
+                    type: string
+                    example: "feedbackAdded"
+                  message:
+                    type: string
+                    example: "Javob qo'shildi"
+        "400":
+          description: Missing message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "missingField"
+                message: "Xabar matni kiritilishi shart"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "notificationNotFound"
+                message: "Xabar topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /notifications/{id}/feedback/{feedbackId}:
+    put:
+      tags: [Notifications]
+      summary: Update a feedback entry
+      description: |
+        Updates the `message` of a feedback entry.
+
+        **Access:** Only the author of that specific feedback entry. Admins do not override
+        authorship for edits — they can still edit their own entries.
+      operationId: updateNotificationFeedback
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/notificationId"
+        - $ref: "#/components/parameters/notificationFeedbackId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationFeedbackInput"
+      responses:
+        "200":
+          description: Feedback updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notification:
+                    $ref: "#/components/schemas/Notification"
+                  code:
+                    type: string
+                    example: "feedbackUpdated"
+                  message:
+                    type: string
+                    example: "Javob yangilandi"
+        "400":
+          description: Missing message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "missingField"
+                message: "Xabar matni kiritilishi shart"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Caller is not the author of this feedback entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "notFeedbackAuthor"
+                message: "Siz bu javobning muallifi emassiz"
+        "404":
+          description: Notification or feedback entry not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                notificationNotFound:
+                  value: { code: "notificationNotFound", message: "Xabar topilmadi" }
+                feedbackNotFound:
+                  value: { code: "feedbackNotFound", message: "Javob topilmadi" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    delete:
+      tags: [Notifications]
+      summary: Delete a feedback entry
+      description: |
+        Removes a feedback entry from the notification's embedded `feedback` array.
+
+        **Access:** The author of the entry, or any admin.
+      operationId: deleteNotificationFeedback
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/notificationId"
+        - $ref: "#/components/parameters/notificationFeedbackId"
+      responses:
+        "200":
+          description: Feedback deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+              example:
+                code: "feedbackDeleted"
+                message: "Javob o'chirildi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Caller is neither the author nor an admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "notFeedbackAuthor"
+                message: "Siz bu javobning muallifi emassiz"
+        "404":
+          description: Notification or feedback entry not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                notificationNotFound:
+                  value: { code: "notificationNotFound", message: "Xabar topilmadi" }
+                feedbackNotFound:
+                  value: { code: "feedbackNotFound", message: "Javob topilmadi" }
         "429":
           $ref: "#/components/responses/TooManyRequests"
