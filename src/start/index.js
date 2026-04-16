@@ -20,14 +20,15 @@ const app = express();
 app.use(requestLogger);
 
 const corsOptions = {
-  origin: function (origin, callback) {
-    const allowedOrigins = process.env.ALLOWED_ORIGINS.split(",").filter(Boolean);
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("CORS tomonidan bloklandi"));
-    }
-  },
+  // origin: function (origin, callback) {
+  //   const allowedOrigins = process.env.ALLOWED_ORIGINS.split(",").filter(Boolean);
+  //   if (!origin || allowedOrigins.includes(origin)) {
+  //     callback(null, true);
+  //   } else {
+  //     callback(new Error("CORS tomonidan bloklandi"));
+  //   }
+  // },
+  origin: "*",
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   maxAge: 86400,
@@ -42,7 +43,8 @@ const limiter = rateLimit({
   windowMs: 3 * 60 * 1000,
   message: {
     code: "tooManyRequests",
-    message: "Juda ko'p so'rovlar yuborildi. Iltimos, 3 daqiqadan keyin urinib ko'ring",
+    message:
+      "Juda ko'p so'rovlar yuborildi. Iltimos, 3 daqiqadan keyin urinib ko'ring",
   },
 });
 
@@ -53,7 +55,7 @@ const isDev = process.env.NODE_ENV !== "production";
 app.use(
   helmet({
     contentSecurityPolicy: isDev
-      ? false  // Swagger UI needs unsafe-inline scripts — disable CSP in dev
+      ? false // Swagger UI needs unsafe-inline scripts — disable CSP in dev
       : {
           directives: {
             defaultSrc: ["'self'"],
@@ -63,7 +65,7 @@ app.use(
           },
         },
     crossOriginEmbedderPolicy: false,
-  })
+  }),
 );
 
 app.use(mongoSanitize());
