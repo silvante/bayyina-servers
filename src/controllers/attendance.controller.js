@@ -9,6 +9,8 @@ const {
 const Attendance = require("../models/Attendance");
 const Enrollment = require("../models/Enrollment");
 const Group = require("../models/Group");
+const User = require("../models/User");
+const recordService = require("../services/recordService");
 
 const ALLOWED_STATUSES = ["present", "absent"];
 
@@ -117,6 +119,26 @@ const bulkMarkAttendance = async (req, res, next) => {
     })
       .populate({ path: "student", select: "firstName lastName phone" })
       .sort({ createdAt: 1 });
+
+    const markedEnrollmentIds = new Set(entries.map((e) => String(e.enrollment)));
+    const actor = recordService.actorFromReq(req);
+    for (const att of records) {
+      if (!markedEnrollmentIds.has(String(att.enrollment))) continue;
+      await recordService.createRecord({
+        eventType: "ATTENDANCE_MARKED",
+        entityType: "Attendance",
+        entityId: att._id,
+        entity: att,
+        actor,
+        refs: {
+          studentId: att.student?._id || att.student,
+          groupId: att.group,
+          enrollmentId: att.enrollment,
+          attendanceId: att._id,
+        },
+        metadata: { student: att.student },
+      });
+    }
 
     res.status(201).json({
       attendance: records,
@@ -384,6 +406,22 @@ const updateAttendance = async (req, res, next) => {
     attendance.markedBy = req.user._id;
     await attendance.save();
 
+    const studentDoc = await User.findById(attendance.student).select("firstName lastName");
+    await recordService.createRecord({
+      eventType: "ATTENDANCE_UPDATED",
+      entityType: "Attendance",
+      entityId: attendance._id,
+      entity: attendance,
+      actor: recordService.actorFromReq(req),
+      refs: {
+        studentId: attendance.student,
+        groupId: attendance.group,
+        enrollmentId: attendance.enrollment,
+        attendanceId: attendance._id,
+      },
+      metadata: { student: studentDoc },
+    });
+
     res.json({
       attendance,
       code: "attendanceUpdated",
@@ -403,6 +441,23 @@ const deleteAttendance = async (req, res, next) => {
         .status(404)
         .json({ code: "attendanceNotFound", message: texts.attendanceNotFound });
     }
+
+    const studentDoc = await User.findById(attendance.student).select("firstName lastName");
+    await recordService.createRecord({
+      eventType: "ATTENDANCE_DELETED",
+      entityType: "Attendance",
+      entityId: attendance._id,
+      entity: attendance,
+      actor: recordService.actorFromReq(req),
+      refs: {
+        studentId: attendance.student,
+        groupId: attendance.group,
+        enrollmentId: attendance.enrollment,
+        attendanceId: attendance._id,
+      },
+      metadata: { student: studentDoc },
+    });
+
     res.json({
       code: "attendanceDeleted",
       message: texts.attendanceDeleted,

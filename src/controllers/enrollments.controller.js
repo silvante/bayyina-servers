@@ -1,6 +1,18 @@
 const texts = require("../data/texts");
 const { getPagination, buildPaginationMeta } = require("../utils/helpers");
 const Enrollment = require("../models/Enrollment");
+const recordService = require("../services/recordService");
+
+const ENROLLMENT_UPDATABLE_FIELDS = [
+  "status",
+  "discount",
+  "discountReason",
+  "paymentDay",
+  "lastPaymentDate",
+  "nextPaymentDate",
+  "debt",
+  "balance",
+];
 
 // GET /enrollments
 const getEnrollments = async (req, res, next) => {
@@ -108,6 +120,19 @@ const createEnrollment = async (req, res, next) => {
       { path: "group", select: "name price" },
     ]);
 
+    await recordService.createRecord({
+      eventType: "ENROLLMENT_CREATED",
+      entityType: "Enrollment",
+      entityId: populated._id,
+      entity: populated,
+      actor: recordService.actorFromReq(req),
+      refs: {
+        studentId: populated.student?._id,
+        groupId: populated.group?._id,
+        enrollmentId: populated._id,
+      },
+    });
+
     res.status(201).json({ enrollment: populated, code: "enrollmentCreated", message: texts.enrollmentCreated });
   } catch (err) {
     next(err);
@@ -137,14 +162,71 @@ const updateEnrollment = async (req, res, next) => {
     if (debt !== undefined) updates.debt = debt;
     if (balance !== undefined) updates.balance = balance;
 
+    const existing = await Enrollment.findById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ code: "enrollmentNotFound", message: texts.enrollmentNotFound });
+    }
+
     const enrollment = await Enrollment.findByIdAndUpdate(
       req.params.id,
       updates,
       { new: true }
-    ).populate({ path: "student", select: "firstName lastName phone" });
+    )
+      .populate({ path: "student", select: "firstName lastName phone" })
+      .populate({ path: "group", select: "name price" });
 
     if (!enrollment) {
       return res.status(404).json({ code: "enrollmentNotFound", message: texts.enrollmentNotFound });
+    }
+
+    const actor = recordService.actorFromReq(req);
+    const refs = {
+      studentId: enrollment.student?._id,
+      groupId: enrollment.group?._id,
+      enrollmentId: enrollment._id,
+    };
+
+    const diff = recordService.diffFields(
+      existing.toObject(),
+      enrollment.toObject(),
+      ENROLLMENT_UPDATABLE_FIELDS,
+    );
+
+    if (diff) {
+      await recordService.createRecord({
+        eventType: "ENROLLMENT_UPDATED",
+        entityType: "Enrollment",
+        entityId: enrollment._id,
+        entity: enrollment,
+        actor,
+        refs,
+        changes: diff,
+      });
+    }
+
+    if (
+      status !== undefined &&
+      String(existing.status) !== String(enrollment.status)
+    ) {
+      if (enrollment.status === "completed") {
+        await recordService.createRecord({
+          eventType: "ENROLLMENT_COMPLETED",
+          entityType: "Enrollment",
+          entityId: enrollment._id,
+          entity: enrollment,
+          actor,
+          refs,
+        });
+      } else if (enrollment.status === "dropped") {
+        await recordService.createRecord({
+          eventType: "ENROLLMENT_DROPPED",
+          entityType: "Enrollment",
+          entityId: enrollment._id,
+          entity: enrollment,
+          actor,
+          refs,
+        });
+      }
     }
 
     res.json({ enrollment, code: "enrollmentUpdated", message: texts.enrollmentUpdated });
@@ -160,6 +242,25 @@ const deleteEnrollment = async (req, res, next) => {
     if (!enrollment) {
       return res.status(404).json({ code: "enrollmentNotFound", message: texts.enrollmentNotFound });
     }
+
+    const populated = await Enrollment.populate(enrollment, [
+      { path: "student", select: "firstName lastName phone" },
+      { path: "group", select: "name" },
+    ]);
+
+    await recordService.createRecord({
+      eventType: "ENROLLMENT_DELETED",
+      entityType: "Enrollment",
+      entityId: enrollment._id,
+      entity: populated,
+      actor: recordService.actorFromReq(req),
+      refs: {
+        studentId: enrollment.student,
+        groupId: enrollment.group,
+        enrollmentId: enrollment._id,
+      },
+    });
+
     res.json({ code: "enrollmentDeleted", message: texts.enrollmentDeleted });
   } catch (err) {
     next(err);

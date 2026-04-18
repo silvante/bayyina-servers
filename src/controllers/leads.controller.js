@@ -6,6 +6,7 @@ const {
   pickAllowedFields,
 } = require("../utils/helpers");
 const Lead = require("../models/Lead");
+const recordService = require("../services/recordService");
 
 const ALLOWED_STATUSES = ["new", "contacted", "interested", "scheduled", "converted", "rejected"];
 const ALLOWED_SOURCES = ["telegram", "instagram", "referral", "offline", "other"];
@@ -139,6 +140,18 @@ const createLead = async (req, res, next) => {
       { path: "createdBy", select: "firstName lastName" },
     ]);
 
+    await recordService.createRecord({
+      eventType: "LEAD_CREATED",
+      entityType: "Lead",
+      entityId: lead._id,
+      entity: lead,
+      actor: recordService.actorFromReq(req),
+      refs: {
+        leadId: lead._id,
+        groupId: lead.group || undefined,
+      },
+    });
+
     res.status(201).json({ lead: populated, code: "leadCreated", message: texts.leadCreated });
   } catch (err) {
     next(err);
@@ -166,12 +179,51 @@ const updateLead = async (req, res, next) => {
 
     updates.lastActivityAt = new Date();
 
+    const existing = await Lead.findById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ code: "leadNotFound", message: texts.leadNotFound });
+    }
+
     const lead = await Lead.findByIdAndUpdate(req.params.id, updates, { new: true })
       .populate({ path: "group", select: "name price" })
       .populate({ path: "createdBy", select: "firstName lastName" });
 
     if (!lead) {
       return res.status(404).json({ code: "leadNotFound", message: texts.leadNotFound });
+    }
+
+    const actor = recordService.actorFromReq(req);
+    const diff = recordService.diffFields(
+      existing.toObject(),
+      lead.toObject(),
+      UPDATABLE_FIELDS,
+    );
+
+    if (diff) {
+      await recordService.createRecord({
+        eventType: "LEAD_UPDATED",
+        entityType: "Lead",
+        entityId: lead._id,
+        entity: lead,
+        actor,
+        refs: { leadId: lead._id, groupId: lead.group?._id || lead.group || undefined },
+        changes: diff,
+      });
+    }
+
+    if (
+      updates.status !== undefined &&
+      String(existing.status) !== String(lead.status)
+    ) {
+      await recordService.createRecord({
+        eventType: "LEAD_STATUS_CHANGED",
+        entityType: "Lead",
+        entityId: lead._id,
+        entity: lead,
+        actor,
+        refs: { leadId: lead._id, groupId: lead.group?._id || lead.group || undefined },
+        metadata: { from: existing.status, to: lead.status },
+      });
     }
 
     res.json({ lead, code: "leadUpdated", message: texts.leadUpdated });
@@ -187,6 +239,16 @@ const deleteLead = async (req, res, next) => {
     if (!lead) {
       return res.status(404).json({ code: "leadNotFound", message: texts.leadNotFound });
     }
+
+    await recordService.createRecord({
+      eventType: "LEAD_DELETED",
+      entityType: "Lead",
+      entityId: lead._id,
+      entity: lead,
+      actor: recordService.actorFromReq(req),
+      refs: { leadId: lead._id, groupId: lead.group || undefined },
+    });
+
     res.json({ code: "leadDeleted", message: texts.leadDeleted });
   } catch (err) {
     next(err);
@@ -204,9 +266,21 @@ const trackLeadClick = async (req, res, next) => {
       return res.status(404).json({ code: "leadNotFound", message: texts.leadNotFound });
     }
 
+    const wasFirstClick = !lead.linkClickedAt;
     if (!lead.linkClickedAt) lead.linkClickedAt = now;
     lead.lastActivityAt = now;
     await lead.save();
+
+    if (wasFirstClick) {
+      await recordService.createRecord({
+        eventType: "LEAD_LINK_CLICKED",
+        entityType: "Lead",
+        entityId: lead._id,
+        entity: lead,
+        actor: recordService.systemActor("Tizim"),
+        refs: { leadId: lead._id, groupId: lead.group || undefined },
+      });
+    }
 
     return res.status(204).end();
   } catch (err) {

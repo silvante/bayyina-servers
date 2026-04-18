@@ -78,6 +78,10 @@ const texts = {
   feedbackNotFound: "Javob topilmadi",
   notFeedbackAuthor: "Siz bu javobning muallifi emassiz",
 
+  // Records
+  recordsFound: "Yozuvlar ro'yxati olindi",
+  recordNotFound: "Yozuv topilmadi",
+
   // General
   serverError: "Serverda ichki xatolik",
   tooManyRequests: "Juda ko'p so'rovlar. Iltimos, 3 daqiqadan keyin urinib ko'ring",

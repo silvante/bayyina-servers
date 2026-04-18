@@ -8,6 +8,23 @@ const {
 const User = require("../models/User");
 const Group = require("../models/Group");
 const Enrollment = require("../models/Enrollment");
+const recordService = require("../services/recordService");
+
+const USER_UPDATABLE_FIELDS = [
+  "firstName",
+  "lastName",
+  "telegramId",
+  "gender",
+  "age",
+  "source",
+  "role",
+];
+
+const roleToEventType = (role) => {
+  if (role === "teacher") return "USER_TEACHER_CREATED";
+  if (role === "admin") return "USER_ADMIN_CREATED";
+  return "USER_STUDENT_CREATED";
+};
 
 // GET /users — admin: all users, teacher: own students, student: only self
 const getUsers = async (req, res, next) => {
@@ -172,7 +189,22 @@ const createUser = async (req, res, next) => {
     const enrolledDate = new Date();
     const resolvedPaymentDay = enrolledDate.getDate();
 
+    const actor = recordService.actorFromReq(req);
+
+    await recordService.createRecord({
+      eventType: roleToEventType(effectiveRole),
+      entityType: "User",
+      entityId: user._id,
+      entity: user,
+      actor,
+      refs: {
+        studentId: effectiveRole === "student" ? user._id : undefined,
+        teacherId: effectiveRole === "teacher" ? user._id : undefined,
+      },
+    });
+
     // Attach to groups
+    let createdEnrollments = [];
     if (effectiveRole === "teacher") {
       if (groupIds && Array.isArray(groupIds) && groupIds.length > 0) {
         await Group.updateMany(
@@ -191,6 +223,24 @@ const createUser = async (req, res, next) => {
             nextPaymentDate: enrolledDate,
           })),
         );
+
+        createdEnrollments = await Enrollment.find({ student: user._id })
+          .populate({ path: "group", select: "name" });
+
+        for (const enr of createdEnrollments) {
+          await recordService.createRecord({
+            eventType: "ENROLLMENT_CREATED",
+            entityType: "Enrollment",
+            entityId: enr._id,
+            entity: { ...enr.toObject(), student: user },
+            actor,
+            refs: {
+              studentId: user._id,
+              groupId: enr.group?._id,
+              enrollmentId: enr._id,
+            },
+          });
+        }
       }
     }
 
@@ -239,6 +289,13 @@ const updateUser = async (req, res, next) => {
 
     const updates = pickAllowedFields(req.body, allowed);
 
+    const existing = await User.findById(targetId).select("-password");
+    if (!existing) {
+      return res
+        .status(404)
+        .json({ code: "userNotFound", message: texts.userNotFound });
+    }
+
     const user = await User.findByIdAndUpdate(targetId, updates, {
       new: true,
     }).select("-password");
@@ -247,6 +304,27 @@ const updateUser = async (req, res, next) => {
       return res
         .status(404)
         .json({ code: "userNotFound", message: texts.userNotFound });
+    }
+
+    const diff = recordService.diffFields(
+      existing.toObject(),
+      user.toObject(),
+      USER_UPDATABLE_FIELDS,
+    );
+
+    if (diff) {
+      await recordService.createRecord({
+        eventType: "USER_UPDATED",
+        entityType: "User",
+        entityId: user._id,
+        entity: user,
+        actor: recordService.actorFromReq(req),
+        refs: {
+          studentId: user.role === "student" ? user._id : undefined,
+          teacherId: user.role === "teacher" ? user._id : undefined,
+        },
+        changes: diff,
+      });
     }
 
     res.json({ user, code: "userUpdated", message: texts.userUpdated });
@@ -264,6 +342,19 @@ const deleteUser = async (req, res, next) => {
         .status(404)
         .json({ code: "userNotFound", message: texts.userNotFound });
     }
+
+    await recordService.createRecord({
+      eventType: "USER_DELETED",
+      entityType: "User",
+      entityId: user._id,
+      entity: user,
+      actor: recordService.actorFromReq(req),
+      refs: {
+        studentId: user.role === "student" ? user._id : undefined,
+        teacherId: user.role === "teacher" ? user._id : undefined,
+      },
+    });
+
     res.json({ code: "userDeleted", message: texts.userDeleted });
   } catch (err) {
     next(err);

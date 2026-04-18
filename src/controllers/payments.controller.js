@@ -2,6 +2,10 @@ const texts = require("../data/texts");
 const { pickAllowedFields, getPagination, buildPaginationMeta } = require("../utils/helpers");
 const Payment = require("../models/Payment");
 const Enrollment = require("../models/Enrollment");
+const User = require("../models/User");
+const recordService = require("../services/recordService");
+
+const PAYMENT_UPDATABLE_FIELDS = ["status", "amount", "note", "paidAt"];
 
 // Returns the next date that falls on `day` of month, starting from `fromDate`
 function getNextPaymentDate(fromDate, day) {
@@ -195,6 +199,37 @@ const createPayment = async (req, res, next) => {
 
     await Enrollment.findByIdAndUpdate(enrollment, enrollmentUpdate);
 
+    const studentDoc = await User.findById(student).select("firstName lastName");
+    const actor = recordService.actorFromReq(req);
+    const refs = {
+      studentId: student,
+      enrollmentId: enrollment,
+      groupId: enrollmentDoc.group?._id || enrollmentDoc.group,
+      paymentId: payment._id,
+    };
+
+    await recordService.createRecord({
+      eventType: "PAYMENT_CREATED",
+      entityType: "Payment",
+      entityId: payment._id,
+      entity: payment,
+      actor,
+      refs,
+      metadata: { student: studentDoc },
+    });
+
+    if (payment.status === "paid") {
+      await recordService.createRecord({
+        eventType: "PAYMENT_PAID",
+        entityType: "Payment",
+        entityId: payment._id,
+        entity: payment,
+        actor,
+        refs,
+        metadata: { student: studentDoc },
+      });
+    }
+
     res.status(201).json({ payment, code: "paymentCreated", message: texts.paymentCreated });
   } catch (err) {
     next(err);
@@ -204,10 +239,15 @@ const createPayment = async (req, res, next) => {
 // PUT /payments/:id — admin or teacher
 const updatePayment = async (req, res, next) => {
   try {
-    const updates = pickAllowedFields(req.body, ["status", "amount", "note", "paidAt"]);
+    const updates = pickAllowedFields(req.body, PAYMENT_UPDATABLE_FIELDS);
 
     if (updates.status === "paid" && !updates.paidAt) {
       updates.paidAt = new Date();
+    }
+
+    const existing = await Payment.findById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ code: "paymentNotFound", message: texts.paymentNotFound });
     }
 
     const payment = await Payment.findByIdAndUpdate(req.params.id, updates, { new: true })
@@ -215,6 +255,51 @@ const updatePayment = async (req, res, next) => {
 
     if (!payment) {
       return res.status(404).json({ code: "paymentNotFound", message: texts.paymentNotFound });
+    }
+
+    const actor = recordService.actorFromReq(req);
+    const refs = {
+      studentId: payment.student?._id || existing.student,
+      enrollmentId: existing.enrollment,
+      paymentId: payment._id,
+    };
+    const studentMeta = payment.student && payment.student.firstName
+      ? payment.student
+      : await User.findById(existing.student).select("firstName lastName");
+
+    const diff = recordService.diffFields(
+      existing.toObject(),
+      payment.toObject(),
+      PAYMENT_UPDATABLE_FIELDS,
+    );
+
+    if (diff) {
+      await recordService.createRecord({
+        eventType: "PAYMENT_UPDATED",
+        entityType: "Payment",
+        entityId: payment._id,
+        entity: payment,
+        actor,
+        refs,
+        changes: diff,
+        metadata: { student: studentMeta },
+      });
+    }
+
+    if (
+      updates.status !== undefined &&
+      existing.status !== payment.status &&
+      payment.status === "paid"
+    ) {
+      await recordService.createRecord({
+        eventType: "PAYMENT_PAID",
+        entityType: "Payment",
+        entityId: payment._id,
+        entity: payment,
+        actor,
+        refs,
+        metadata: { student: studentMeta },
+      });
     }
 
     res.json({ payment, code: "paymentUpdated", message: texts.paymentUpdated });

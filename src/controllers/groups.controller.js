@@ -2,6 +2,9 @@ const texts = require("../data/texts");
 const { pickAllowedFields, getPagination, buildPaginationMeta } = require("../utils/helpers");
 const Group = require("../models/Group");
 const Enrollment = require("../models/Enrollment");
+const recordService = require("../services/recordService");
+
+const GROUP_UPDATABLE_FIELDS = ["name", "description", "price", "teacher", "schedule", "room"];
 
 // GET /groups
 const getGroups = async (req, res, next) => {
@@ -97,6 +100,18 @@ const createGroup = async (req, res, next) => {
 
     const populated = await group.populate({ path: "teacher", select: "firstName lastName phone" });
 
+    await recordService.createRecord({
+      eventType: "GROUP_CREATED",
+      entityType: "Group",
+      entityId: group._id,
+      entity: group,
+      actor: recordService.actorFromReq(req),
+      refs: {
+        groupId: group._id,
+        teacherId: group.teacher,
+      },
+    });
+
     res.status(201).json({ group: populated, code: "groupCreated", message: texts.groupCreated });
   } catch (err) {
     next(err);
@@ -106,15 +121,39 @@ const createGroup = async (req, res, next) => {
 // PUT /groups/:id — admin only
 const updateGroup = async (req, res, next) => {
   try {
-    const updates = pickAllowedFields(req.body, [
-      "name", "description", "price", "teacher", "schedule", "room",
-    ]);
+    const updates = pickAllowedFields(req.body, GROUP_UPDATABLE_FIELDS);
+
+    const existing = await Group.findById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ code: "groupNotFound", message: texts.groupNotFound });
+    }
 
     const group = await Group.findByIdAndUpdate(req.params.id, updates, { new: true })
       .populate({ path: "teacher", select: "firstName lastName phone" });
 
     if (!group) {
       return res.status(404).json({ code: "groupNotFound", message: texts.groupNotFound });
+    }
+
+    const diff = recordService.diffFields(
+      existing.toObject(),
+      group.toObject(),
+      GROUP_UPDATABLE_FIELDS,
+    );
+
+    if (diff) {
+      await recordService.createRecord({
+        eventType: "GROUP_UPDATED",
+        entityType: "Group",
+        entityId: group._id,
+        entity: group,
+        actor: recordService.actorFromReq(req),
+        refs: {
+          groupId: group._id,
+          teacherId: group.teacher?._id || group.teacher,
+        },
+        changes: diff,
+      });
     }
 
     res.json({ group, code: "groupUpdated", message: texts.groupUpdated });
@@ -130,6 +169,19 @@ const deleteGroup = async (req, res, next) => {
     if (!group) {
       return res.status(404).json({ code: "groupNotFound", message: texts.groupNotFound });
     }
+
+    await recordService.createRecord({
+      eventType: "GROUP_DELETED",
+      entityType: "Group",
+      entityId: group._id,
+      entity: group,
+      actor: recordService.actorFromReq(req),
+      refs: {
+        groupId: group._id,
+        teacherId: group.teacher,
+      },
+    });
+
     res.json({ code: "groupDeleted", message: texts.groupDeleted });
   } catch (err) {
     next(err);
