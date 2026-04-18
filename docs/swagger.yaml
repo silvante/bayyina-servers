@@ -74,6 +74,32 @@ tags:
       ```json
       { "success": true, "data": { ... } }
       ```
+  - name: Records
+    description: |
+      Event timeline — **admin only**.
+
+      An append-only log of every significant action in the study center:
+      students created, leads moved through the pipeline, enrollments started/ended,
+      payments taken or marked overdue, attendance marked, and more. Records are
+      generated automatically by controllers and the overdue-payment job, and are
+      never mutated after creation.
+
+      Each record carries:
+        - A human-readable **Uzbek `description`** (e.g. *"Mardonbek yangi o'quvchi Ali Valiyev ni qo'shdi"*).
+        - A unique **`code`** in the format `REC-YYYYMMDD-NNNN` (daily counter, zero-padded) for easy citation.
+        - An **`eventType`** enum for programmatic filtering (e.g. `LEAD_STATUS_CHANGED`, `ENROLLMENT_DROPPED`).
+        - An **`actor`** snapshot (userId, role, name at the time of the event) — including
+          `role: "system"` for records produced by cron jobs like `PAYMENT_OVERDUE`.
+        - A **`refs`** object with all related IDs (leadId, studentId, teacherId, groupId,
+          enrollmentId, paymentId, attendanceId) so the timeline can be filtered by any
+          participant.
+        - An optional **`changes`** object (`before`/`after` maps of only the fields that
+          actually changed) for update events.
+        - Optional **`metadata`** for extras (e.g. `{ from, to }` for status transitions,
+          the populated `student` for payment/attendance events).
+
+      Sorted by `createdAt` descending by default. Supports rich filtering — see
+      `GET /records` query parameters.
 
 # ─────────────────────────────────────────────
 # Security scheme
@@ -1411,6 +1437,206 @@ components:
           type: string
           example: "Telefon raqam yoki parol noto'g'ri"
 
+    # ── Record ──────────────────────────────────
+    RecordEventType:
+      type: string
+      description: |
+        The programmatic event type. Naming convention: `<ENTITY>_<ACTION>`.
+
+        | Group         | Values                                                                                          |
+        |---------------|-------------------------------------------------------------------------------------------------|
+        | Users         | `USER_STUDENT_CREATED`, `USER_TEACHER_CREATED`, `USER_ADMIN_CREATED`, `USER_UPDATED`, `USER_DELETED` |
+        | Leads         | `LEAD_CREATED`, `LEAD_UPDATED`, `LEAD_STATUS_CHANGED`, `LEAD_DELETED`, `LEAD_LINK_CLICKED`      |
+        | Enrollments   | `ENROLLMENT_CREATED`, `ENROLLMENT_UPDATED`, `ENROLLMENT_COMPLETED`, `ENROLLMENT_DROPPED`, `ENROLLMENT_DELETED` |
+        | Groups        | `GROUP_CREATED`, `GROUP_UPDATED`, `GROUP_DELETED`                                               |
+        | Payments      | `PAYMENT_CREATED`, `PAYMENT_PAID`, `PAYMENT_OVERDUE`, `PAYMENT_UPDATED`, `PAYMENT_DELETED`      |
+        | Attendance    | `ATTENDANCE_MARKED`, `ATTENDANCE_UPDATED`, `ATTENDANCE_DELETED`                                 |
+      enum:
+        - USER_STUDENT_CREATED
+        - USER_TEACHER_CREATED
+        - USER_ADMIN_CREATED
+        - USER_UPDATED
+        - USER_DELETED
+        - LEAD_CREATED
+        - LEAD_UPDATED
+        - LEAD_STATUS_CHANGED
+        - LEAD_DELETED
+        - LEAD_LINK_CLICKED
+        - ENROLLMENT_CREATED
+        - ENROLLMENT_UPDATED
+        - ENROLLMENT_COMPLETED
+        - ENROLLMENT_DROPPED
+        - ENROLLMENT_DELETED
+        - GROUP_CREATED
+        - GROUP_UPDATED
+        - GROUP_DELETED
+        - PAYMENT_CREATED
+        - PAYMENT_PAID
+        - PAYMENT_OVERDUE
+        - PAYMENT_UPDATED
+        - PAYMENT_DELETED
+        - ATTENDANCE_MARKED
+        - ATTENDANCE_UPDATED
+        - ATTENDANCE_DELETED
+      example: LEAD_STATUS_CHANGED
+
+    RecordEntityType:
+      type: string
+      description: The type of primary entity this record concerns.
+      enum: [Lead, User, Enrollment, Group, Payment, Attendance, System]
+      example: Lead
+
+    RecordActor:
+      type: object
+      description: |
+        Snapshot of who performed the action, captured at event time.
+        For records produced by scheduled jobs (e.g. `PAYMENT_OVERDUE`), the actor
+        is `{ userId: null, role: "system", name: "Tizim" }`.
+      properties:
+        userId:
+          type: string
+          nullable: true
+          description: ObjectId of the user who performed the action, or `null` for system events.
+          example: "664f1a2b3c4d5e6f7a8b9c0d"
+        role:
+          type: string
+          enum: [admin, teacher, student, system]
+          example: admin
+        name:
+          type: string
+          description: Display name of the actor at the time of the event.
+          example: "Mardonbek Khamidov"
+
+    RecordRefs:
+      type: object
+      description: |
+        All related entity IDs for this record. Populated based on event context;
+        missing keys mean the relationship doesn't apply to this event.
+        Used for fine-grained filtering (e.g. *"show every record mentioning student X"*).
+      properties:
+        leadId:       { type: string, nullable: true, example: "664f1a2b3c4d5e6f7a8b9c50" }
+        studentId:    { type: string, nullable: true, example: "664f1a2b3c4d5e6f7a8b9c0d" }
+        teacherId:    { type: string, nullable: true, example: "664f1a2b3c4d5e6f7a8b9c0e" }
+        groupId:      { type: string, nullable: true, example: "664f1a2b3c4d5e6f7a8b9c10" }
+        enrollmentId: { type: string, nullable: true, example: "664f1a2b3c4d5e6f7a8b9c20" }
+        paymentId:    { type: string, nullable: true, example: "664f1a2b3c4d5e6f7a8b9c30" }
+        attendanceId: { type: string, nullable: true, example: "664f1a2b3c4d5e6f7a8b9c40" }
+
+    RecordChanges:
+      type: object
+      description: |
+        Before/after diff for update events. Only fields that **actually changed**
+        are included — unchanged fields are omitted. `null` represents an absent value.
+        Absent entirely on non-update events.
+      properties:
+        before:
+          type: object
+          additionalProperties: true
+          example: { status: "contacted", paymentStatus: "unpaid" }
+        after:
+          type: object
+          additionalProperties: true
+          example: { status: "converted", paymentStatus: "paid" }
+
+    Record:
+      type: object
+      description: A single event-log entry. Immutable once written.
+      properties:
+        _id:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9cAA"
+        code:
+          type: string
+          description: |
+            Unique human-readable code: `REC-YYYYMMDD-NNNN`.
+            The 4-digit counter resets daily and is generated atomically, so codes
+            are strictly increasing within a given day.
+          example: "REC-20260418-0001"
+        eventType:
+          $ref: "#/components/schemas/RecordEventType"
+        entityType:
+          $ref: "#/components/schemas/RecordEntityType"
+        entityId:
+          type: string
+          nullable: true
+          description: ObjectId of the primary entity (lead, user, enrollment, group, payment, or attendance) this event concerns.
+          example: "664f1a2b3c4d5e6f7a8b9c50"
+        description:
+          type: string
+          description: |
+            Human-readable Uzbek message built from the event type and entity snapshot.
+            Safe to display as-is in the admin timeline UI.
+          example: "\"Ali Valiyev\" murojaati holati: yangi → o'quvchiga aylantirildi"
+        actor:
+          $ref: "#/components/schemas/RecordActor"
+        refs:
+          $ref: "#/components/schemas/RecordRefs"
+        changes:
+          $ref: "#/components/schemas/RecordChanges"
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: |
+            Free-form extras specific to the event type. Common examples:
+              - `LEAD_STATUS_CHANGED`: `{ from: "contacted", to: "converted" }`
+              - `PAYMENT_*` / `ATTENDANCE_*`: `{ student: { _id, firstName, lastName } }`
+          example:
+            from: contacted
+            to: converted
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-04-18T09:12:33.221Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-04-18T09:12:33.221Z"
+
+    RecordsListResponse:
+      type: object
+      properties:
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/Record"
+        total:
+          type: integer
+          example: 184
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        totalPages:
+          type: integer
+          example: 10
+        hasNextPage:
+          type: boolean
+          example: true
+        hasPrevPage:
+          type: boolean
+          example: false
+        code:
+          type: string
+          example: recordsFound
+        message:
+          type: string
+          example: "Yozuvlar ro'yxati olindi"
+
+    RecordResponse:
+      type: object
+      properties:
+        record:
+          $ref: "#/components/schemas/Record"
+        code:
+          type: string
+          example: recordsFound
+        message:
+          type: string
+          example: "Yozuvlar ro'yxati olindi"
+
   # ─────────────────────────────────────────────
   # Reusable parameters
   # ─────────────────────────────────────────────
@@ -1511,6 +1737,36 @@ components:
         type: integer
         default: 20
       description: Number of results per page (default 20, max 100)
+
+    recordIdOrCode:
+      name: id
+      in: path
+      required: true
+      description: |
+        Either the MongoDB ObjectId of the record **or** its human-readable code
+        (format `REC-YYYYMMDD-NNNN`). The server disambiguates by format.
+      schema:
+        type: string
+        example: "REC-20260418-0001"
+
+    recordEntityType:
+      name: entityType
+      in: path
+      required: true
+      description: Entity type whose timeline should be fetched.
+      schema:
+        type: string
+        enum: [Lead, User, Enrollment, Group, Payment, Attendance, System]
+        example: Enrollment
+
+    recordEntityId:
+      name: entityId
+      in: path
+      required: true
+      description: ObjectId of the entity whose timeline should be fetched.
+      schema:
+        type: string
+        example: "664f1a2b3c4d5e6f7a8b9c20"
 
   # ─────────────────────────────────────────────
   # Reusable responses
@@ -5076,5 +5332,307 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ══════════════════════════════════════════
+  # RECORDS
+  # ══════════════════════════════════════════
+
+  /records:
+    get:
+      tags: [Records]
+      summary: List records (event timeline)
+      description: |
+        Returns a paginated, reverse-chronological list of records.
+        **Admin only.**
+
+        Supports rich filtering — combine any of the query parameters below:
+          - **`eventType`** / **`entityType`** narrow by category.
+          - **`entityId`** matches the record's primary entity.
+          - **`actorId`** shows everything done by a specific user (useful for auditing staff).
+          - **`leadId` / `studentId` / `teacherId` / `groupId` / `enrollmentId` / `paymentId` / `attendanceId`**
+            use the `refs` map, so you get every record *mentioning* that participant —
+            even ones where it's not the primary entity (e.g. payments for a given student).
+          - **`from` / `to`** bound the window by `createdAt`.
+          - **`search`** runs a case-insensitive regex on `description` and `code`
+            (useful for typing in a code like `REC-20260418-0001`).
+
+        Examples:
+          - Churn view → `?eventType=ENROLLMENT_DROPPED&from=2026-04-01`
+          - Full history of a student → `?studentId=664f1a2b3c4d5e6f7a8b9c0d`
+          - Audit one teacher → `?actorId=664f1a2b3c4d5e6f7a8b9c0e`
+      operationId: listRecords
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/pageParam"
+        - $ref: "#/components/parameters/limitParam"
+        - name: eventType
+          in: query
+          required: false
+          description: Filter by programmatic event type.
+          schema:
+            $ref: "#/components/schemas/RecordEventType"
+        - name: entityType
+          in: query
+          required: false
+          description: Filter by primary entity type.
+          schema:
+            $ref: "#/components/schemas/RecordEntityType"
+        - name: entityId
+          in: query
+          required: false
+          description: Filter by the primary entity's ObjectId (matches `entityId` directly).
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c50"
+        - name: actorId
+          in: query
+          required: false
+          description: Filter to records performed by this user (`actor.userId`). System events are excluded.
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c0d"
+        - name: leadId
+          in: query
+          required: false
+          description: Match any record whose `refs.leadId` equals this ObjectId.
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c50"
+        - name: studentId
+          in: query
+          required: false
+          description: Match any record whose `refs.studentId` equals this ObjectId.
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c0d"
+        - name: teacherId
+          in: query
+          required: false
+          description: Match any record whose `refs.teacherId` equals this ObjectId.
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c0e"
+        - name: groupId
+          in: query
+          required: false
+          description: Match any record whose `refs.groupId` equals this ObjectId.
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c10"
+        - name: enrollmentId
+          in: query
+          required: false
+          description: Match any record whose `refs.enrollmentId` equals this ObjectId.
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c20"
+        - name: paymentId
+          in: query
+          required: false
+          description: Match any record whose `refs.paymentId` equals this ObjectId.
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c30"
+        - name: attendanceId
+          in: query
+          required: false
+          description: Match any record whose `refs.attendanceId` equals this ObjectId.
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c40"
+        - name: from
+          in: query
+          required: false
+          description: Lower bound for `createdAt` (inclusive). ISO date or date-time.
+          schema:
+            type: string
+            format: date
+            example: "2026-04-01"
+        - name: to
+          in: query
+          required: false
+          description: Upper bound for `createdAt` (inclusive — end-of-day applied if a date is given).
+          schema:
+            type: string
+            format: date
+            example: "2026-04-30"
+        - name: search
+          in: query
+          required: false
+          description: Case-insensitive regex match against `description` and `code`.
+          schema:
+            type: string
+            example: "Ali Valiyev"
+      responses:
+        "200":
+          description: Records found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordsListResponse"
+              example:
+                records:
+                  - _id: "664f1a2b3c4d5e6f7a8b9cAA"
+                    code: "REC-20260418-0002"
+                    eventType: "LEAD_STATUS_CHANGED"
+                    entityType: "Lead"
+                    entityId: "664f1a2b3c4d5e6f7a8b9c50"
+                    description: "\"Ali Valiyev\" murojaati holati: yangi → o'quvchiga aylantirildi"
+                    actor:
+                      userId: "664f1a2b3c4d5e6f7a8b9c0d"
+                      role: admin
+                      name: "Mardonbek Khamidov"
+                    refs:
+                      leadId: "664f1a2b3c4d5e6f7a8b9c50"
+                      groupId: "664f1a2b3c4d5e6f7a8b9c10"
+                    metadata:
+                      from: new
+                      to: converted
+                    createdAt: "2026-04-18T09:14:02.881Z"
+                    updatedAt: "2026-04-18T09:14:02.881Z"
+                  - _id: "664f1a2b3c4d5e6f7a8b9cAB"
+                    code: "REC-20260418-0001"
+                    eventType: "LEAD_CREATED"
+                    entityType: "Lead"
+                    entityId: "664f1a2b3c4d5e6f7a8b9c50"
+                    description: "Mardonbek Khamidov yangi murojaat \"Ali Valiyev\" ni qo'shdi"
+                    actor:
+                      userId: "664f1a2b3c4d5e6f7a8b9c0d"
+                      role: admin
+                      name: "Mardonbek Khamidov"
+                    refs:
+                      leadId: "664f1a2b3c4d5e6f7a8b9c50"
+                    createdAt: "2026-04-18T09:12:33.221Z"
+                    updatedAt: "2026-04-18T09:12:33.221Z"
+                total: 2
+                page: 1
+                limit: 20
+                totalPages: 1
+                hasNextPage: false
+                hasPrevPage: false
+                code: recordsFound
+                message: "Yozuvlar ro'yxati olindi"
+        "400":
+          description: Invalid `eventType` or `entityType` query value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalidEventType:
+                  value: { code: "invalidField", message: "Hodisa turi noto'g'ri" }
+                invalidEntityType:
+                  value: { code: "invalidField", message: "Obyekt turi noto'g'ri" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /records/entity/{entityType}/{entityId}:
+    get:
+      tags: [Records]
+      summary: Full timeline for a single entity
+      description: |
+        Returns every record tied to one specific entity — both as the primary
+        `entityId` and as a `refs.*` reference. Useful for the "Activity" tab on a
+        student, lead, enrollment, group, or payment detail page.
+
+        **Admin only.** Sorted `createdAt` descending, paginated.
+      operationId: getEntityTimeline
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/recordEntityType"
+        - $ref: "#/components/parameters/recordEntityId"
+        - $ref: "#/components/parameters/pageParam"
+        - $ref: "#/components/parameters/limitParam"
+      responses:
+        "200":
+          description: Records found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordsListResponse"
+        "400":
+          description: Invalid `entityType` or non-ObjectId `entityId`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalidEntityType:
+                  value: { code: "invalidField", message: "Obyekt turi noto'g'ri" }
+                invalidId:
+                  value: { code: "invalidId", message: "ID noto'g'ri kiritildi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /records/{id}:
+    get:
+      tags: [Records]
+      summary: Get one record by ObjectId or code
+      description: |
+        Returns a single record. The `{id}` path parameter accepts either:
+          - a MongoDB **ObjectId** (24 hex chars), or
+          - a human-readable **code** like `REC-20260418-0001`.
+
+        The server decides by format, so a staff member can paste a code from a
+        screenshot directly into the URL.
+
+        **Admin only.**
+      operationId: getRecord
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/recordIdOrCode"
+      responses:
+        "200":
+          description: Record found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordResponse"
+              example:
+                record:
+                  _id: "664f1a2b3c4d5e6f7a8b9cAA"
+                  code: "REC-20260418-0001"
+                  eventType: "ENROLLMENT_DROPPED"
+                  entityType: "Enrollment"
+                  entityId: "664f1a2b3c4d5e6f7a8b9c20"
+                  description: "Ali Valiyev \"Python — Oqshom 1\" guruhidan chiqdi"
+                  actor:
+                    userId: "664f1a2b3c4d5e6f7a8b9c0d"
+                    role: admin
+                    name: "Mardonbek Khamidov"
+                  refs:
+                    studentId: "664f1a2b3c4d5e6f7a8b9c0f"
+                    groupId: "664f1a2b3c4d5e6f7a8b9c10"
+                    enrollmentId: "664f1a2b3c4d5e6f7a8b9c20"
+                  createdAt: "2026-04-18T09:12:33.221Z"
+                  updatedAt: "2026-04-18T09:12:33.221Z"
+                code: recordsFound
+                message: "Yozuvlar ro'yxati olindi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: recordNotFound
+                message: "Yozuv topilmadi"
         "429":
           $ref: "#/components/responses/TooManyRequests"
