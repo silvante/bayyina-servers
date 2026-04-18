@@ -9,6 +9,7 @@ const paymentsRoute = require("../routes/payments");
 const attendanceRoute = require("../routes/attendance");
 const leadsRoute = require("../routes/leads");
 const notificationsRoute = require("../routes/notifications");
+const statisticsRoute = require("../routes/statistics");
 
 // Error handler
 const errorHandler = require("../middlewares/errorHandler");
@@ -24,5 +25,6 @@ app.use("/api/payments", paymentsRoute);
 app.use("/api/attendance", attendanceRoute);
 app.use("/api/leads", leadsRoute);
 app.use("/api/notifications", notificationsRoute);
+app.use("/api/statistics", statisticsRoute);
 
 app.use(errorHandler);

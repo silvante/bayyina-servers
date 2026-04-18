@@ -62,6 +62,18 @@ tags:
       admins see everything. Staff reply via an embedded `feedback` array on each notification
       (no separate module). The `role` of each feedback entry is always set by the server from
       the authenticated user's role and never trusted from the client.
+  - name: Statistics
+    description: |
+      Analytics and reporting endpoints — **admin only**.
+
+      All endpoints support optional date filtering via `startDate` and `endDate` query
+      parameters (`YYYY-MM-DD`). When omitted, all-time data is returned (or last 6 months
+      for trend series).
+
+      Each response has the shape:
+      ```json
+      { "success": true, "data": { ... } }
+      ```
 
 # ─────────────────────────────────────────────
 # Security scheme
@@ -1557,6 +1569,26 @@ components:
           example:
             code: "tooManyRequests"
             message: "Juda ko'p so'rovlar. Iltimos, 3 daqiqadan keyin urinib ko'ring"
+
+    startDate:
+      name: startDate
+      in: query
+      required: false
+      description: Filter start date (inclusive). Format `YYYY-MM-DD`. Parsed as UTC midnight.
+      schema:
+        type: string
+        format: date
+        example: "2026-01-01"
+
+    endDate:
+      name: endDate
+      in: query
+      required: false
+      description: Filter end date (inclusive). Format `YYYY-MM-DD`. Parsed as UTC end-of-day.
+      schema:
+        type: string
+        format: date
+        example: "2026-04-30"
 
 # ═════════════════════════════════════════════
 # PATHS
@@ -4524,5 +4556,525 @@ paths:
                   value: { code: "notificationNotFound", message: "Xabar topilmadi" }
                 feedbackNotFound:
                   value: { code: "feedbackNotFound", message: "Javob topilmadi" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+# ─────────────────────────────────────────────
+
+# ─────────────────────────────────────────────
+# Statistics paths
+# ─────────────────────────────────────────────
+
+  /statistics/overview:
+    get:
+      tags: [Statistics]
+      summary: Dashboard KPIs
+      operationId: getStatisticsOverview
+      description: |
+        Returns four high-level key performance indicators for the current calendar month:
+        - Total leads (all-time)
+        - Total active students (deduplicated across groups)
+        - Revenue collected this calendar month
+        - Attendance rate this calendar month (%)
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: KPI snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      totalLeads:
+                        type: integer
+                        description: All-time total number of leads
+                        example: 342
+                      totalActiveStudents:
+                        type: integer
+                        description: Number of unique students with at least one active enrollment
+                        example: 118
+                      revenueThisMonth:
+                        type: number
+                        description: Sum of all payments marked `paid` this calendar month (UZS)
+                        example: 24300000
+                      attendanceRateThisMonth:
+                        type: integer
+                        description: Percentage of attendance records marked `present` this month
+                        minimum: 0
+                        maximum: 100
+                        example: 84
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /statistics/leads:
+    get:
+      tags: [Statistics]
+      summary: Lead analytics
+      operationId: getStatisticsLeads
+      description: |
+        Returns a full breakdown of the lead pipeline:
+
+        - **byStatus** — count per status value (`new`, `contacted`, `interested`, `scheduled`, `converted`, `rejected`)
+        - **bySource** — count per acquisition channel (`telegram`, `instagram`, `referral`, `offline`, `other`)
+        - **byGender** — count for `male` / `female` (leads with no gender are excluded)
+        - **monthlyTrend** — per-month totals and converted count for the last 6 months
+        - **conversionRate** — `converted / totalLeads x 100` (integer %)
+
+        All counts respect the optional `startDate` / `endDate` filter on `createdAt`.
+        The trend series always covers the last 6 calendar months regardless of the date filter.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/startDate"
+        - $ref: "#/components/parameters/endDate"
+      responses:
+        "200":
+          description: Lead analytics payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      totalLeads:
+                        type: integer
+                        example: 342
+                      conversionRate:
+                        type: integer
+                        description: Percentage of leads that converted (0-100)
+                        example: 23
+                      byStatus:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            status:
+                              type: string
+                              enum: [new, contacted, interested, scheduled, converted, rejected]
+                              example: "new"
+                            count:
+                              type: integer
+                              example: 95
+                        example:
+                          - { status: "new",       count: 95 }
+                          - { status: "contacted", count: 72 }
+                          - { status: "interested", count: 58 }
+                          - { status: "scheduled", count: 39 }
+                          - { status: "converted", count: 47 }
+                          - { status: "rejected",  count: 31 }
+                      bySource:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            source:
+                              type: string
+                              enum: [telegram, instagram, referral, offline, other]
+                              example: "instagram"
+                            count:
+                              type: integer
+                              example: 140
+                        example:
+                          - { source: "instagram", count: 140 }
+                          - { source: "telegram",  count: 85  }
+                          - { source: "referral",  count: 62  }
+                          - { source: "offline",   count: 35  }
+                          - { source: "other",     count: 20  }
+                      byGender:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            gender:
+                              type: string
+                              enum: [male, female]
+                            count:
+                              type: integer
+                        example:
+                          - { gender: "male",   count: 198 }
+                          - { gender: "female", count: 122 }
+                      monthlyTrend:
+                        type: array
+                        description: One entry per calendar month, last 6 months, sorted ascending
+                        items:
+                          type: object
+                          properties:
+                            year:
+                              type: integer
+                              example: 2026
+                            month:
+                              type: integer
+                              minimum: 1
+                              maximum: 12
+                              example: 4
+                            total:
+                              type: integer
+                              description: Total leads created in this month
+                              example: 58
+                            converted:
+                              type: integer
+                              description: Of those leads, how many were converted
+                              example: 12
+                        example:
+                          - { year: 2025, month: 11, total: 42, converted: 9  }
+                          - { year: 2025, month: 12, total: 55, converted: 11 }
+                          - { year: 2026, month: 1,  total: 48, converted: 10 }
+                          - { year: 2026, month: 2,  total: 61, converted: 14 }
+                          - { year: 2026, month: 3,  total: 78, converted: 18 }
+                          - { year: 2026, month: 4,  total: 58, converted: 12 }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /statistics/students:
+    get:
+      tags: [Statistics]
+      summary: Student and enrollment analytics
+      operationId: getStatisticsStudents
+      description: |
+        Returns student and enrollment-level metrics:
+
+        - **enrollmentsByStatus** — count of enrollments per status (`active`, `completed`, `dropped`)
+        - **genderDistribution** — male/female breakdown of all users with `role=student`
+        - **debtOverview** — how many active enrollments carry outstanding debt, total debt and balance amounts
+        - **studentsPerGroup** — active student count per group, sorted descending
+
+        The optional `startDate` / `endDate` filter applies to `enrolledAt`.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/startDate"
+        - $ref: "#/components/parameters/endDate"
+      responses:
+        "200":
+          description: Student analytics payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      enrollmentsByStatus:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            status:
+                              type: string
+                              enum: [active, completed, dropped]
+                            count:
+                              type: integer
+                        example:
+                          - { status: "active",    count: 118 }
+                          - { status: "completed", count: 45  }
+                          - { status: "dropped",   count: 22  }
+                      genderDistribution:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            gender:
+                              type: string
+                              enum: [male, female]
+                            count:
+                              type: integer
+                        example:
+                          - { gender: "male",   count: 74 }
+                          - { gender: "female", count: 44 }
+                      debtOverview:
+                        type: object
+                        properties:
+                          activeEnrollments:
+                            type: integer
+                            description: Total number of currently active enrollments
+                            example: 118
+                          studentsInDebt:
+                            type: integer
+                            description: Number of active enrollments where debt is greater than zero
+                            example: 31
+                          totalOutstandingDebt:
+                            type: number
+                            description: Sum of all debt values across active enrollments (UZS)
+                            example: 7200000
+                          totalBalance:
+                            type: number
+                            description: Sum of all credit balances across active enrollments (UZS)
+                            example: 1050000
+                      studentsPerGroup:
+                        type: array
+                        description: Active enrollments per group, sorted by student count descending
+                        items:
+                          type: object
+                          properties:
+                            groupId:
+                              type: string
+                              example: "664f1a2b3c4d5e6f7a8b9c10"
+                            groupName:
+                              type: string
+                              example: "Python — Oqshom 1"
+                            studentCount:
+                              type: integer
+                              example: 14
+                        example:
+                          - { groupId: "664f1a2b3c4d5e6f7a8b9c10", groupName: "Python — Oqshom 1", studentCount: 14 }
+                          - { groupId: "664f1a2b3c4d5e6f7a8b9c11", groupName: "English — Ertalab",  studentCount: 11 }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /statistics/revenue:
+    get:
+      tags: [Statistics]
+      summary: Revenue and payment analytics
+      operationId: getStatisticsRevenue
+      description: |
+        Returns financial metrics across payments and enrollments:
+
+        - **monthlyRevenue** — monthly collected revenue for the last 6 months (paid payments only)
+        - **totalCollected** — total amount collected (within optional date range)
+        - **totalPaymentsCount** — number of paid payment records
+        - **expectedMonthlyRevenue** — sum of `(group.price - enrollment.discount)` for all active enrollments
+        - **totalOutstandingDebt** — sum of `debt` across all active enrollments
+        - **totalBalance** — sum of `balance` (credit) across all active enrollments
+        - **paymentStatusDistribution** — count and sum per payment status (`paid`, `pending`, `overdue`)
+
+        The optional `startDate` / `endDate` filter applies to `paidAt`.
+        The 6-month trend series always covers the last 6 calendar months.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/startDate"
+        - $ref: "#/components/parameters/endDate"
+      responses:
+        "200":
+          description: Revenue analytics payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      monthlyRevenue:
+                        type: array
+                        description: Collected revenue per month, last 6 months, sorted ascending
+                        items:
+                          type: object
+                          properties:
+                            year:
+                              type: integer
+                              example: 2026
+                            month:
+                              type: integer
+                              minimum: 1
+                              maximum: 12
+                              example: 4
+                            collected:
+                              type: number
+                              description: Total amount of paid payments in this month (UZS)
+                              example: 24300000
+                            payments:
+                              type: integer
+                              description: Number of paid payment records in this month
+                              example: 54
+                        example:
+                          - { year: 2025, month: 11, collected: 18600000, payments: 41 }
+                          - { year: 2025, month: 12, collected: 21000000, payments: 47 }
+                          - { year: 2026, month: 1,  collected: 22500000, payments: 50 }
+                          - { year: 2026, month: 2,  collected: 20700000, payments: 46 }
+                          - { year: 2026, month: 3,  collected: 23400000, payments: 52 }
+                          - { year: 2026, month: 4,  collected: 24300000, payments: 54 }
+                      totalCollected:
+                        type: number
+                        description: All-time (or date-filtered) total collected amount (UZS)
+                        example: 130500000
+                      totalPaymentsCount:
+                        type: integer
+                        description: Number of paid payment records included in totalCollected
+                        example: 290
+                      expectedMonthlyRevenue:
+                        type: number
+                        description: >
+                          Sum of effective monthly fees for all active enrollments
+                          (group price minus any per-enrollment discount). Represents
+                          ideal monthly revenue if every student pays in full.
+                        example: 53100000
+                      totalOutstandingDebt:
+                        type: number
+                        description: Total debt owed across all active enrollments (UZS)
+                        example: 7200000
+                      totalBalance:
+                        type: number
+                        description: Total credit balance held across all active enrollments (UZS)
+                        example: 1050000
+                      paymentStatusDistribution:
+                        type: array
+                        description: Breakdown of all payment records by status
+                        items:
+                          type: object
+                          properties:
+                            status:
+                              type: string
+                              enum: [paid, pending, overdue]
+                            count:
+                              type: integer
+                              description: Number of payment records with this status
+                            total:
+                              type: number
+                              description: Sum of amounts for records with this status (UZS)
+                        example:
+                          - { status: "paid",    count: 290, total: 130500000 }
+                          - { status: "pending", count: 28,  total: 12600000  }
+                          - { status: "overdue", count: 11,  total: 4950000   }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /statistics/attendance:
+    get:
+      tags: [Statistics]
+      summary: Attendance analytics
+      operationId: getStatisticsAttendance
+      description: |
+        Returns attendance metrics across all groups:
+
+        - **overall** — total records, present, absent, and overall attendance rate (%)
+        - **byGroup** — per-group attendance rate, sorted highest-to-lowest
+        - **monthlyTrend** — monthly attendance rate for the last 6 months
+
+        The optional `startDate` / `endDate` filter applies to the attendance `date` field.
+        The 6-month trend series always starts from 6 months ago regardless of the date filter.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/startDate"
+        - $ref: "#/components/parameters/endDate"
+      responses:
+        "200":
+          description: Attendance analytics payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      overall:
+                        type: object
+                        properties:
+                          total:
+                            type: integer
+                            description: Total attendance records in the date range
+                            example: 1840
+                          present:
+                            type: integer
+                            description: Records with status present
+                            example: 1546
+                          absent:
+                            type: integer
+                            description: Records with status absent
+                            example: 294
+                          attendanceRate:
+                            type: integer
+                            description: present divided by total, multiplied by 100, rounded (0-100)
+                            example: 84
+                      byGroup:
+                        type: array
+                        description: Per-group attendance rate, sorted by rate descending
+                        items:
+                          type: object
+                          properties:
+                            groupId:
+                              type: string
+                              example: "664f1a2b3c4d5e6f7a8b9c10"
+                            groupName:
+                              type: string
+                              example: "Python — Oqshom 1"
+                            total:
+                              type: integer
+                              example: 420
+                            present:
+                              type: integer
+                              example: 378
+                            attendanceRate:
+                              type: number
+                              description: Rounded to 1 decimal place
+                              example: 90.0
+                        example:
+                          - { groupId: "664f1a2b3c4d5e6f7a8b9c10", groupName: "Python — Oqshom 1", total: 420, present: 378, attendanceRate: 90.0 }
+                          - { groupId: "664f1a2b3c4d5e6f7a8b9c11", groupName: "English — Ertalab",  total: 330, present: 280, attendanceRate: 84.8 }
+                      monthlyTrend:
+                        type: array
+                        description: Monthly attendance rate for the last 6 months, sorted ascending
+                        items:
+                          type: object
+                          properties:
+                            year:
+                              type: integer
+                              example: 2026
+                            month:
+                              type: integer
+                              minimum: 1
+                              maximum: 12
+                              example: 4
+                            total:
+                              type: integer
+                              example: 320
+                            present:
+                              type: integer
+                              example: 275
+                            attendanceRate:
+                              type: number
+                              description: Rounded to 1 decimal place
+                              example: 85.9
+                        example:
+                          - { year: 2025, month: 11, total: 295, present: 244, attendanceRate: 82.7 }
+                          - { year: 2025, month: 12, total: 310, present: 258, attendanceRate: 83.2 }
+                          - { year: 2026, month: 1,  total: 285, present: 239, attendanceRate: 83.9 }
+                          - { year: 2026, month: 2,  total: 298, present: 254, attendanceRate: 85.2 }
+                          - { year: 2026, month: 3,  total: 332, present: 286, attendanceRate: 86.1 }
+                          - { year: 2026, month: 4,  total: 320, present: 275, attendanceRate: 85.9 }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "429":
           $ref: "#/components/responses/TooManyRequests"
