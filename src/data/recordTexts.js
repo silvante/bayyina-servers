@@ -102,6 +102,16 @@ const formatters = {
   },
   ATTENDANCE_DELETED: (at, a, m) =>
     `${a.name} ${fullName(m?.student)} davomatini o'chirdi (${fmtDate(at?.date)})`,
+
+  // Salaries
+  SALARY_CREATED: (s, a, m) =>
+    `${a.name} ${fullName(m?.teacher)} uchun ${fmtAmount(s?.netAmount)} so'm oylik shakllantirdi`,
+  SALARY_UPDATED: (s, a, m) =>
+    `${a.name} ${fullName(m?.teacher)} oyligini yangiladi`,
+  SALARY_PAID: (s, a, m) =>
+    `${a.name} ${fullName(m?.teacher)} ga ${fmtAmount(s?.netAmount)} so'm oylik to'ladi`,
+  SALARY_DELETED: (s, a, m) =>
+    `${a.name} ${fullName(m?.teacher)} oyligini o'chirdi`,
 };
 
 module.exports = {

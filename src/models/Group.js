@@ -31,6 +31,12 @@ const Group = new mongoose.Schema(
       required: true,
     },
     room: { type: String },
+    salaryType: {
+      type: String,
+      enum: ["percentage", "per_student", "fixed"],
+      default: "percentage",
+    },
+    salaryValue: { type: Number, default: 30 },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

@@ -74,6 +74,32 @@ tags:
       ```json
       { "success": true, "data": { ... } }
       ```
+  - name: Salaries
+    description: |
+      Teacher salary management — **admin only** (teachers can read their own).
+
+      The system calculates teachers' monthly salaries from each group's
+      configured `salaryType` and `salaryValue` (set on the Group resource).
+
+      **Salary types**:
+        - `percentage` — teacher earns a percentage of the group's monthly paid revenue.
+          `amount = groupRevenue × salaryValue / 100`
+        - `per_student` — teacher earns a fixed amount per paying student that month.
+          `amount = paidStudentsCount × salaryValue`
+        - `fixed` — teacher earns a flat monthly amount per group, regardless of attendance.
+          `amount = salaryValue`
+
+      A salary record stores a per-group breakdown plus optional admin-set
+      `bonus` and `deduction`. The `netAmount` is always
+      `totalAmount + bonus - deduction`.
+
+      **Workflow**:
+        1. `GET /salaries/calculate?teacher=<id>&month=YYYY-MM-01` — preview the computed amount without persisting.
+        2. `POST /salaries/generate` — compute and persist salaries for all teachers (idempotent with `overwrite=true`).
+        3. `PUT /salaries/{id}` or `POST /salaries/{id}/pay` — finalise as paid when the teacher receives money.
+
+      Salary calculation only counts payments with `status = "paid"` whose
+      `month` falls inside the salary record's month.
   - name: Records
     description: |
       Event timeline — **admin only**.
@@ -403,6 +429,23 @@ components:
           type: string
           nullable: true
           example: "Room 3"
+        salaryType:
+          type: string
+          enum: [percentage, per_student, fixed]
+          default: percentage
+          description: |
+            How the teacher's pay is computed for this group:
+              - `percentage` — % of paid revenue
+              - `per_student` — fixed UZS per paying student
+              - `fixed` — flat monthly amount
+          example: "percentage"
+        salaryValue:
+          type: number
+          default: 30
+          description: |
+            Numeric value paired with `salaryType`. For `percentage`, this is the
+            percent (0–100). For `per_student` or `fixed`, this is the UZS amount.
+          example: 30
         createdBy:
           type: string
           description: Admin user ID who created the group
@@ -450,6 +493,15 @@ components:
         room:
           type: string
           example: "Room 3"
+        salaryType:
+          type: string
+          enum: [percentage, per_student, fixed]
+          default: percentage
+          example: "percentage"
+        salaryValue:
+          type: number
+          default: 30
+          example: 30
 
     GroupUpdateInput:
       type: object
@@ -482,6 +534,13 @@ components:
         room:
           type: string
           example: "Room 5"
+        salaryType:
+          type: string
+          enum: [percentage, per_student, fixed]
+          example: "per_student"
+        salaryValue:
+          type: number
+          example: 50000
 
     # ── Enrollment ──────────────────────────────
     Enrollment:
@@ -1637,6 +1696,273 @@ components:
           type: string
           example: "Yozuvlar ro'yxati olindi"
 
+    # ── Salary ──────────────────────────────────
+    SalaryGroupBreakdown:
+      type: object
+      description: |
+        One row of a salary's per-group breakdown. Snapshotted at calculation
+        time so the figures don't drift if a group's salary config changes later.
+      properties:
+        group:
+          oneOf:
+            - type: string
+            - type: object
+              properties:
+                _id:
+                  type: string
+                  example: "664f1a2b3c4d5e6f7a8b9c10"
+                name:
+                  type: string
+                  example: "Python — Oqshom 1"
+                price:
+                  type: number
+                  example: 450000
+                salaryType:
+                  type: string
+                  enum: [percentage, per_student, fixed]
+                  example: "percentage"
+                salaryValue:
+                  type: number
+                  example: 30
+        groupName:
+          type: string
+          description: Group name copied at calculation time
+          example: "Python — Oqshom 1"
+        salaryType:
+          type: string
+          enum: [percentage, per_student, fixed]
+          example: "percentage"
+        salaryValue:
+          type: number
+          example: 30
+        studentCount:
+          type: integer
+          description: Number of `active` enrollments in this group at calculation time
+          example: 12
+        paidStudentsCount:
+          type: integer
+          description: Distinct students who paid for the salary's month
+          example: 10
+        groupRevenue:
+          type: number
+          description: Sum of `paid` payment amounts in the salary's month for this group (UZS)
+          example: 4500000
+        amount:
+          type: number
+          description: Salary amount earned from this group (UZS, rounded to integer)
+          example: 1350000
+
+    Salary:
+      type: object
+      description: A teacher's monthly salary record with a per-group breakdown
+      properties:
+        _id:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c60"
+        teacher:
+          oneOf:
+            - type: string
+            - type: object
+              properties:
+                _id:
+                  type: string
+                  example: "664f1a2b3c4d5e6f7a8b9c0d"
+                firstName:
+                  type: string
+                  example: "Sarvinoz"
+                lastName:
+                  type: string
+                  example: "Yusupova"
+                phone:
+                  type: integer
+                  example: 998997654321
+        month:
+          type: string
+          format: date-time
+          description: |
+            First UTC millisecond of the month the salary covers. The server
+            normalises any incoming `month` value to the start of its month
+            (so `2026-04-15` and `2026-04-01` both resolve to the April record).
+          example: "2026-04-01T00:00:00.000Z"
+        groups:
+          type: array
+          description: Per-group breakdown of how the salary was computed
+          items:
+            $ref: "#/components/schemas/SalaryGroupBreakdown"
+        totalAmount:
+          type: number
+          description: Sum of `groups[].amount` (UZS, rounded)
+          example: 3200000
+        bonus:
+          type: number
+          default: 0
+          description: Optional admin-set bonus added to `totalAmount` (UZS)
+          example: 200000
+        deduction:
+          type: number
+          default: 0
+          description: Optional admin-set deduction subtracted from `totalAmount` (UZS)
+          example: 0
+        netAmount:
+          type: number
+          description: |
+            Final payable amount: `totalAmount + bonus - deduction`. Re-derived
+            by the server on every `PUT` — clients should not send it.
+          example: 3400000
+        status:
+          type: string
+          enum: [pending, paid]
+          default: pending
+          example: "pending"
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when status flipped to `paid`. Auto-set by `POST /salaries/{id}/pay`.
+          example: "2026-05-03T10:00:00.000Z"
+        note:
+          type: string
+          nullable: true
+          example: "Naqd to'landi"
+        createdBy:
+          oneOf:
+            - type: string
+              nullable: true
+            - type: object
+              properties:
+                _id:
+                  type: string
+                  example: "664f1a2b3c4d5e6f7a8b9c0f"
+                firstName:
+                  type: string
+                  example: "Mardonbek"
+                lastName:
+                  type: string
+                  example: "Khamidov"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-04-30T22:00:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-05-03T10:00:00.000Z"
+
+    SalaryInput:
+      type: object
+      required: [teacher, month]
+      description: |
+        Manually create a single salary record. The server auto-computes
+        `groups[]`, `totalAmount`, and `netAmount` from the teacher's groups
+        and that month's paid payments. The provided `bonus` / `deduction`
+        are folded into `netAmount`.
+      properties:
+        teacher:
+          type: string
+          description: ObjectId of the teacher (User with `role = teacher`)
+          example: "664f1a2b3c4d5e6f7a8b9c0d"
+        month:
+          type: string
+          format: date
+          description: |
+            Any date inside the target month. The server normalises to the
+            first day of that month in UTC.
+          example: "2026-04-01"
+        bonus:
+          type: number
+          default: 0
+          example: 200000
+        deduction:
+          type: number
+          default: 0
+          example: 0
+        note:
+          type: string
+          example: "Aprel oyligi — naqd"
+
+    SalaryUpdateInput:
+      type: object
+      description: |
+        Partial update — only provided fields are changed. `netAmount` is
+        recomputed from `totalAmount + bonus - deduction` on every update.
+        Setting `status = "paid"` without `paidAt` makes the server stamp the
+        current time.
+      properties:
+        bonus:
+          type: number
+          example: 250000
+        deduction:
+          type: number
+          example: 50000
+        note:
+          type: string
+          example: "Bonus qo'shildi"
+        status:
+          type: string
+          enum: [pending, paid]
+          example: "paid"
+        paidAt:
+          type: string
+          format: date-time
+          example: "2026-05-03T10:00:00.000Z"
+
+    SalaryGenerateInput:
+      type: object
+      required: [month]
+      description: |
+        Bulk-generate salary records for one or more teachers in a given month.
+        For each target teacher, the server computes the breakdown and:
+          - **creates** a new salary if none exists for that month,
+          - **skips** the teacher if a salary already exists *and* `overwrite=false`,
+          - **rewrites** the breakdown/`totalAmount` (preserving any existing
+            `bonus`, `deduction`, and `paid` status) if `overwrite=true`.
+      properties:
+        month:
+          type: string
+          format: date
+          description: Any date in the target month — server normalises to the 1st.
+          example: "2026-04-01"
+        teacherIds:
+          type: array
+          description: Optional subset of teacher ObjectIds. Omit to target all teachers.
+          items:
+            type: string
+          example: ["664f1a2b3c4d5e6f7a8b9c0d", "664f1a2b3c4d5e6f7a8b9c0e"]
+        overwrite:
+          type: boolean
+          default: false
+          description: If `true`, recompute and overwrite any existing salary record for the month.
+          example: false
+
+    SalaryPreview:
+      type: object
+      description: |
+        Preview of a teacher's salary for a month — same shape as a `Salary`
+        document but **not persisted**. Use it for "what-if" or pre-check UIs.
+      properties:
+        teacher:
+          $ref: "#/components/schemas/User"
+        month:
+          type: string
+          format: date-time
+          example: "2026-04-01T00:00:00.000Z"
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/SalaryGroupBreakdown"
+        totalAmount:
+          type: number
+          example: 3200000
+        bonus:
+          type: number
+          example: 0
+        deduction:
+          type: number
+          example: 0
+        netAmount:
+          type: number
+          example: 3200000
+
   # ─────────────────────────────────────────────
   # Reusable parameters
   # ─────────────────────────────────────────────
@@ -1722,6 +2048,15 @@ components:
         type: string
         example: "664f1a2b3c4d5e6f7a8b9c20"
 
+    salaryId:
+      name: id
+      in: path
+      required: true
+      description: MongoDB ObjectId of the salary record
+      schema:
+        type: string
+        example: "664f1a2b3c4d5e6f7a8b9c60"
+
     pageParam:
       name: page
       in: query
@@ -1756,7 +2091,7 @@ components:
       description: Entity type whose timeline should be fetched.
       schema:
         type: string
-        enum: [Lead, User, Enrollment, Group, Payment, Attendance, System]
+        enum: [Lead, User, Enrollment, Group, Payment, Attendance, Salary, System]
         example: Enrollment
 
     recordEntityId:
@@ -5634,5 +5969,535 @@ paths:
               example:
                 code: recordNotFound
                 message: "Yozuv topilmadi"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ══════════════════════════════════════════
+  # SALARIES
+  # ══════════════════════════════════════════
+
+  /salaries:
+    get:
+      tags: [Salaries]
+      summary: List salary records
+      description: |
+        Returns paginated salary records.
+
+        **Scope**:
+          - `admin` — sees every salary, can filter by `teacher` query.
+          - `teacher` — automatically scoped to their own salaries
+            (the `teacher` query is ignored to prevent leakage).
+
+        **Filtering**:
+          - `month=YYYY-MM-01` — exact month
+          - `from=YYYY-MM-01` & `to=YYYY-MM-01` — month range (inclusive)
+          - `status=pending|paid`
+
+        Salaries are returned newest month first.
+      operationId: listSalaries
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/pageParam"
+        - $ref: "#/components/parameters/limitParam"
+        - name: teacher
+          in: query
+          description: Filter by teacher ObjectId. Admins only — ignored for `teacher` role.
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c0d"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, paid]
+            example: "pending"
+        - name: month
+          in: query
+          description: Exact month (any date inside the month works; server normalises).
+          schema:
+            type: string
+            format: date
+            example: "2026-04-01"
+        - name: from
+          in: query
+          description: Range start month (inclusive).
+          schema:
+            type: string
+            format: date
+            example: "2026-01-01"
+        - name: to
+          in: query
+          description: Range end month (inclusive).
+          schema:
+            type: string
+            format: date
+            example: "2026-04-01"
+      responses:
+        "200":
+          description: List of salaries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  salaries:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Salary"
+                  total: { type: integer, example: 12 }
+                  page: { type: integer, example: 1 }
+                  limit: { type: integer, example: 20 }
+                  totalPages: { type: integer, example: 1 }
+                  hasNextPage: { type: boolean, example: false }
+                  hasPrevPage: { type: boolean, example: false }
+                  code: { type: string, example: salariesFound }
+                  message: { type: string, example: "Oyliklar ro'yxati olindi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    post:
+      tags: [Salaries]
+      summary: Create a salary record manually
+      description: |
+        Creates a single salary record for one teacher in one month.
+
+        The server **auto-computes** the per-group breakdown and `totalAmount`
+        from that teacher's groups and the month's paid payments. The provided
+        `bonus` and `deduction` are folded into the final `netAmount`.
+
+        Errors:
+          - `salaryAlreadyExists` (400) — the teacher already has a salary for this month.
+            Use `POST /salaries/generate` with `overwrite=true` instead.
+          - `notATeacher` (400) — the target user is not a `teacher`.
+
+        **Admin only.**
+      operationId: createSalary
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalaryInput"
+            example:
+              teacher: "664f1a2b3c4d5e6f7a8b9c0d"
+              month: "2026-04-01"
+              bonus: 200000
+              deduction: 0
+              note: "Aprel oyligi"
+      responses:
+        "201":
+          description: Salary created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  salary:
+                    $ref: "#/components/schemas/Salary"
+                  code: { type: string, example: salaryCreated }
+                  message: { type: string, example: "Oylik yaratildi" }
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missingField:
+                  value: { code: "missingField", message: "O'qituvchi kiritilishi shart" }
+                invalidMonth:
+                  value: { code: "invalidMonth", message: "Oy noto'g'ri kiritildi" }
+                notATeacher:
+                  value: { code: "notATeacher", message: "Foydalanuvchi o'qituvchi emas" }
+                salaryAlreadyExists:
+                  value: { code: "salaryAlreadyExists", message: "Bu oy uchun oylik allaqachon mavjud" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Teacher not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "userNotFound", message: "Foydalanuvchi topilmadi" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /salaries/calculate:
+    get:
+      tags: [Salaries]
+      summary: Preview a teacher's salary for a month (no persistence)
+      description: |
+        Returns the computed salary breakdown for one teacher in one month,
+        **without** writing anything to the database.
+
+        Use this to drive a "Calculate" button on the admin payroll UI before
+        committing the salary with `POST /salaries` or `POST /salaries/generate`.
+
+        **Admin only.**
+      operationId: calculateSalary
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: teacher
+          in: query
+          required: true
+          description: Teacher ObjectId.
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c0d"
+        - name: month
+          in: query
+          required: false
+          description: Any date in the target month. Defaults to the current month.
+          schema:
+            type: string
+            format: date
+            example: "2026-04-01"
+      responses:
+        "200":
+          description: Preview computed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  preview:
+                    $ref: "#/components/schemas/SalaryPreview"
+                  code: { type: string, example: salaryCalculated }
+                  message: { type: string, example: "Oylik hisoblandi" }
+              example:
+                preview:
+                  teacher:
+                    _id: "664f1a2b3c4d5e6f7a8b9c0d"
+                    firstName: "Sarvinoz"
+                    lastName: "Yusupova"
+                    phone: 998997654321
+                    role: "teacher"
+                  month: "2026-04-01T00:00:00.000Z"
+                  groups:
+                    - group: "664f1a2b3c4d5e6f7a8b9c10"
+                      groupName: "Python — Oqshom 1"
+                      salaryType: "percentage"
+                      salaryValue: 30
+                      studentCount: 12
+                      paidStudentsCount: 10
+                      groupRevenue: 4500000
+                      amount: 1350000
+                    - group: "664f1a2b3c4d5e6f7a8b9c11"
+                      groupName: "Python — Kunduz 2"
+                      salaryType: "per_student"
+                      salaryValue: 50000
+                      studentCount: 8
+                      paidStudentsCount: 7
+                      groupRevenue: 3150000
+                      amount: 350000
+                  totalAmount: 1700000
+                  bonus: 0
+                  deduction: 0
+                  netAmount: 1700000
+                code: salaryCalculated
+                message: "Oylik hisoblandi"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missingField:
+                  value: { code: "missingField", message: "O'qituvchi ID kiritilishi shart" }
+                notATeacher:
+                  value: { code: "notATeacher", message: "Foydalanuvchi o'qituvchi emas" }
+                invalidMonth:
+                  value: { code: "invalidMonth", message: "Oy noto'g'ri kiritildi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Teacher not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "userNotFound", message: "Foydalanuvchi topilmadi" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /salaries/generate:
+    post:
+      tags: [Salaries]
+      summary: Bulk-generate salaries for a month
+      description: |
+        Computes and persists salary records for **all teachers** (or the
+        explicit subset in `teacherIds`) for the given month.
+
+        For each teacher:
+          - if no salary exists → a new one is **created** (`status = pending`).
+          - if a salary exists and `overwrite = false` (default) → it is **skipped**
+            and listed under `skipped[]`.
+          - if a salary exists and `overwrite = true` → the breakdown and
+            `totalAmount` are **rewritten** (existing `bonus`, `deduction`,
+            and `paid` status are preserved).
+
+        Always emits a `SALARY_CREATED` Record event per persisted salary.
+
+        **Admin only.**
+      operationId: generateSalaries
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalaryGenerateInput"
+            examples:
+              allTeachers:
+                summary: Generate for every teacher
+                value:
+                  month: "2026-04-01"
+              subset:
+                summary: Generate for two specific teachers, overwrite if exists
+                value:
+                  month: "2026-04-01"
+                  teacherIds:
+                    - "664f1a2b3c4d5e6f7a8b9c0d"
+                    - "664f1a2b3c4d5e6f7a8b9c0e"
+                  overwrite: true
+      responses:
+        "201":
+          description: Salaries generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  generated:
+                    type: integer
+                    description: Number of salaries persisted (created or overwritten)
+                    example: 5
+                  skipped:
+                    type: array
+                    description: Teachers whose salary already existed and were left untouched
+                    items:
+                      type: object
+                      properties:
+                        teacher:
+                          type: string
+                          example: "664f1a2b3c4d5e6f7a8b9c0d"
+                        salaryId:
+                          type: string
+                          example: "664f1a2b3c4d5e6f7a8b9c60"
+                        reason:
+                          type: string
+                          example: "exists"
+                  salaries:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Salary"
+                  code: { type: string, example: salariesGenerated }
+                  message: { type: string, example: "Oyliklar shakllantirildi" }
+        "400":
+          description: Invalid month
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "invalidMonth", message: "Oy noto'g'ri kiritildi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /salaries/{id}:
+    get:
+      tags: [Salaries]
+      summary: Get one salary record
+      description: |
+        Returns a single salary with `teacher`, group breakdown groups
+        (with populated `name`/`price`/`salaryType`/`salaryValue`), and `createdBy`.
+
+        **Scope**: admins access any record; teachers only their own
+        (`forbidden` otherwise).
+      operationId: getSalary
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/salaryId"
+      responses:
+        "200":
+          description: Salary found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  salary:
+                    $ref: "#/components/schemas/Salary"
+                  code: { type: string, example: salariesFound }
+                  message: { type: string, example: "Oyliklar ro'yxati olindi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Salary not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "salaryNotFound", message: "Oylik topilmadi" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    put:
+      tags: [Salaries]
+      summary: Update bonus / deduction / note / status
+      description: |
+        Partial update.
+
+        - Updating `bonus` or `deduction` triggers `netAmount` recompute on the server.
+        - Setting `status = "paid"` without `paidAt` makes the server stamp the current time.
+        - Flipping `pending → paid` emits a `SALARY_PAID` Record event in addition to `SALARY_UPDATED`.
+
+        **Admin only.**
+      operationId: updateSalary
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/salaryId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalaryUpdateInput"
+            examples:
+              addBonus:
+                summary: Add a bonus
+                value: { bonus: 250000, note: "Yaxshi ishlagani uchun" }
+              markPaid:
+                summary: Mark as paid
+                value: { status: "paid" }
+      responses:
+        "200":
+          description: Salary updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  salary:
+                    $ref: "#/components/schemas/Salary"
+                  code: { type: string, example: salaryUpdated }
+                  message: { type: string, example: "Oylik yangilandi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Salary not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "salaryNotFound", message: "Oylik topilmadi" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    delete:
+      tags: [Salaries]
+      summary: Delete a salary record
+      description: |
+        Removes a salary record permanently. A `SALARY_DELETED` Record is
+        appended to the audit log.
+
+        **Admin only.**
+      operationId: deleteSalary
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/salaryId"
+      responses:
+        "200":
+          description: Salary deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string, example: salaryDeleted }
+                  message: { type: string, example: "Oylik o'chirildi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Salary not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "salaryNotFound", message: "Oylik topilmadi" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /salaries/{id}/pay:
+    post:
+      tags: [Salaries]
+      summary: Mark a salary as paid
+      description: |
+        Convenience endpoint equivalent to:
+        ```
+        PUT /salaries/{id}
+        { "status": "paid" }
+        ```
+        Sets `status = "paid"` and `paidAt = <now>`. Idempotent — calling it
+        on an already-paid salary returns the existing record without changes.
+
+        Emits a `SALARY_PAID` Record event on the first transition only.
+
+        **Admin only.**
+      operationId: paySalary
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/salaryId"
+      responses:
+        "200":
+          description: Salary marked paid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  salary:
+                    $ref: "#/components/schemas/Salary"
+                  code: { type: string, example: salaryPaid }
+                  message: { type: string, example: "Oylik to'landi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Salary not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "salaryNotFound", message: "Oylik topilmadi" }
         "429":
           $ref: "#/components/responses/TooManyRequests"

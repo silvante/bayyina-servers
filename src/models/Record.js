@@ -38,6 +38,12 @@ const EVENT_TYPES = [
   "ATTENDANCE_MARKED",
   "ATTENDANCE_UPDATED",
   "ATTENDANCE_DELETED",
+
+  // Salaries
+  "SALARY_CREATED",
+  "SALARY_UPDATED",
+  "SALARY_PAID",
+  "SALARY_DELETED",
 ];
 
 const ENTITY_TYPES = [
@@ -47,6 +53,7 @@ const ENTITY_TYPES = [
   "Group",
   "Payment",
   "Attendance",
+  "Salary",
   "System",
 ];
 
@@ -70,6 +77,7 @@ const Record = new mongoose.Schema(
       enrollmentId: { type: mongoose.Schema.Types.ObjectId, ref: "Enrollment" },
       paymentId: { type: mongoose.Schema.Types.ObjectId, ref: "Payment" },
       attendanceId: { type: mongoose.Schema.Types.ObjectId, ref: "Attendance" },
+      salaryId: { type: mongoose.Schema.Types.ObjectId, ref: "Salary" },
     },
     changes: {
       before: { type: mongoose.Schema.Types.Mixed },
@@ -90,6 +98,7 @@ Record.index({ "refs.groupId": 1, createdAt: -1 }, { sparse: true });
 Record.index({ "refs.enrollmentId": 1, createdAt: -1 }, { sparse: true });
 Record.index({ "refs.paymentId": 1, createdAt: -1 }, { sparse: true });
 Record.index({ "refs.attendanceId": 1, createdAt: -1 }, { sparse: true });
+Record.index({ "refs.salaryId": 1, createdAt: -1 }, { sparse: true });
 
 module.exports = mongoose.model("Record", Record);
 module.exports.EVENT_TYPES = EVENT_TYPES;

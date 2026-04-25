@@ -13,6 +13,7 @@ require("../models/User");
 require("../models/Group");
 require("../models/Enrollment");
 require("../models/Payment");
+require("../models/Salary");
 require("../models/VerificationCode");
 
 const app = express();

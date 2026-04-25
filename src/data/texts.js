@@ -82,6 +82,19 @@ const texts = {
   recordsFound: "Yozuvlar ro'yxati olindi",
   recordNotFound: "Yozuv topilmadi",
 
+  // Salaries
+  salaryCreated: "Oylik yaratildi",
+  salaryUpdated: "Oylik yangilandi",
+  salaryDeleted: "Oylik o'chirildi",
+  salaryPaid: "Oylik to'landi",
+  salaryNotFound: "Oylik topilmadi",
+  salariesFound: "Oyliklar ro'yxati olindi",
+  salaryCalculated: "Oylik hisoblandi",
+  salariesGenerated: "Oyliklar shakllantirildi",
+  salaryAlreadyExists: "Bu oy uchun oylik allaqachon mavjud",
+  notATeacher: "Foydalanuvchi o'qituvchi emas",
+  invalidMonth: "Oy noto'g'ri kiritildi",
+
   // General
   serverError: "Serverda ichki xatolik",
   tooManyRequests: "Juda ko'p so'rovlar. Iltimos, 3 daqiqadan keyin urinib ko'ring",
