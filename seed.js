@@ -8,6 +8,9 @@ const Enrollment = require("./src/models/Enrollment");
 const Payment = require("./src/models/Payment");
 const Attendance = require("./src/models/Attendance");
 const Lead = require("./src/models/Lead");
+const LeadSource = require("./src/models/LeadSource");
+const CourseType = require("./src/models/CourseType");
+const RejectionReason = require("./src/models/RejectionReason");
 const Notification = require("./src/models/Notification");
 const Record = require("./src/models/Record");
 const Counter = require("./src/models/Counter");
@@ -69,22 +72,36 @@ const ROOMS = [
   "1-xona", "2-xona", "3-xona", "4-xona", "5-xona", "Asosiy zal", "Kichik zal", "Kutubxona",
 ];
 
-const PROFESSIONS = [
-  "O'qituvchi", "Talaba", "Muhandis", "Shifokor", "Tadbirkor", "Dasturchi",
-  "Buxgalter", "Sotuvchi", "Haydovchi", "Quruvchi", "Uy bekasi", "Imom",
-];
 
-const LEAD_SOURCES = ["telegram", "instagram", "referral", "offline", "other"];
 const STUDENT_SOURCES = ["telegram", "instagram", "referral", "offline", "tanish-bilishlar"];
 const LEAD_STATUSES = ["new", "contacted", "interested", "scheduled", "converted", "rejected"];
 const LEVELS = ["Boshlang'ich", "O'rta", "Yuqori"];
 
-const REJECTION_REASONS = [
-  "Narx qimmat",
-  "Vaqti to'g'ri kelmaydi",
-  "Boshqa kursni tanladi",
-  "Aloqaga chiqmadi",
-  "Manzil uzoq",
+const LEAD_SOURCE_SEEDS = [
+  { name: "Telegram", slug: "telegram" },
+  { name: "Instagram", slug: "instagram" },
+  { name: "Referral", slug: "referral" },
+  { name: "Oflayn", slug: "offline" },
+  { name: "Boshqa", slug: "other" },
+];
+
+const COURSE_TYPE_SEEDS = [
+  { name: "Tajwid — Boshlang'ich", type: "Tajwid", direction: "Boshlang'ich" },
+  { name: "Tajwid — O'rta", type: "Tajwid", direction: "O'rta" },
+  { name: "Arab tili — A1/A2", type: "Arab tili", direction: "A1/A2" },
+  { name: "Arab tili — B1/B2", type: "Arab tili", direction: "B1/B2" },
+  { name: "Qur'on tilovati", type: "Qur'on tilovati", direction: "Boshlang'ich" },
+  { name: "Aqida — Asoslar", type: "Aqida", direction: "Asoslar" },
+  { name: "Hadis", type: "Hadis", direction: "Boshlang'ich" },
+  { name: "Fiqh", type: "Fiqh", direction: "Boshlang'ich" },
+];
+
+const REJECTION_REASON_SEEDS = [
+  { title: "Narx qimmat", description: "Kurs narxi kutilganidan yuqori" },
+  { title: "Vaqti to'g'ri kelmaydi", description: "Dars jadvali mos kelmadi" },
+  { title: "Boshqa kursni tanladi", description: "Boshqa markaz yoki kursga yozildi" },
+  { title: "Aloqaga chiqmadi", description: "Bir necha urinishdan keyin javob yo'q" },
+  { title: "Manzil uzoq", description: "Markazgacha masofa juda uzoq" },
 ];
 
 const LEAD_INTERESTS = [
@@ -213,6 +230,9 @@ async function main() {
     Payment.deleteMany({}),
     Attendance.deleteMany({}),
     Lead.deleteMany({}),
+    LeadSource.deleteMany({}),
+    CourseType.deleteMany({}),
+    RejectionReason.deleteMany({}),
     Notification.deleteMany({}),
     Record.deleteMany({}),
     Counter.deleteMany({}),
@@ -624,6 +644,27 @@ async function main() {
   }
   console.log(`✅ ${attInserted} davomat`);
 
+  // ========== LEAD SOURCES ==========
+  console.log("Lead manbalar yaratilmoqda...");
+  const leadSources = await LeadSource.insertMany(
+    LEAD_SOURCE_SEEDS.map((s) => ({ ...s, createdBy: admin._id }))
+  );
+  console.log(`✅ ${leadSources.length} manba`);
+
+  // ========== COURSE TYPES ==========
+  console.log("Kurs turlari yaratilmoqda...");
+  const courseTypes = await CourseType.insertMany(
+    COURSE_TYPE_SEEDS.map((s) => ({ ...s, createdBy: admin._id }))
+  );
+  console.log(`✅ ${courseTypes.length} kurs turi`);
+
+  // ========== REJECTION REASONS ==========
+  console.log("Rad etish sabablari yaratilmoqda...");
+  const rejectionReasons = await RejectionReason.insertMany(
+    REJECTION_REASON_SEEDS.map((s) => ({ ...s, createdBy: admin._id }))
+  );
+  console.log(`✅ ${rejectionReasons.length} rad etish sababi`);
+
   // ========== LEADS ==========
   console.log(`${LEAD_COUNT} ta lead yaratilmoqda...`);
   const leadDocs = [];
@@ -631,7 +672,6 @@ async function main() {
     const gender = Math.random() < 0.5 ? "male" : "female";
     const firstName = gender === "male" ? pick(FIRST_NAMES_MALE) : pick(FIRST_NAMES_FEMALE);
     const status = pickWeighted(LEAD_STATUSES, [25, 15, 18, 12, 18, 12]);
-    const source = pick(LEAD_SOURCES);
     const createdAt = new Date(now.getTime() - randInt(0, 90) * 86400000);
     const isConverted = status === "converted";
     const isRejected = status === "rejected";
@@ -641,17 +681,16 @@ async function main() {
       phone: phonePool[pIdx++],
       gender,
       age: randInt(8, 50),
-      profession: pick(PROFESSIONS),
-      source,
+      source: pick(leadSources)._id,
       interest: pick(LEAD_INTERESTS),
       uniqueLink: `BAY-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
       ...(Math.random() < 0.6 && {
         linkClickedAt: new Date(createdAt.getTime() + randInt(1, 48) * 3600000),
       }),
-      ...(Math.random() < 0.5 && { group: pick(groups)._id }),
+      ...(Math.random() < 0.7 && { courseType: pick(courseTypes)._id }),
       level: pick(LEVELS),
       status,
-      ...(isRejected && { rejectionReason: pick(REJECTION_REASONS) }),
+      ...(isRejected && { rejectionReason: pick(rejectionReasons)._id }),
       paymentStatus: isConverted ? pick(["paid", "partial"]) : "unpaid",
       ...(["scheduled", "interested"].includes(status) && {
         scheduledAt: new Date(now.getTime() + randInt(1, 14) * 86400000),
