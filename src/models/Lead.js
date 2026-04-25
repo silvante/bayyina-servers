@@ -7,16 +7,16 @@ const Lead = new mongoose.Schema(
     telegramId: { type: String, unique: true, sparse: true },
     gender: { type: String, enum: ["male", "female"] },
     age: { type: Number, min: 1, max: 120 },
-    profession: { type: String },
+    profession: { type: String }, // unnecessary
     source: {
       type: String,
       enum: ["telegram", "instagram", "referral", "offline", "other"],
       default: "other",
-    },
+    }, // should be in separate model, which has its own crud
     interest: { type: String },
     uniqueLink: { type: String, unique: true, index: true },
     linkClickedAt: { type: Date, default: null },
-    group: {
+    group: { // should be named group type and direction, and should be in separate model, which has its own crud
       type: mongoose.Schema.Types.ObjectId,
       ref: "Group",
     },
@@ -26,7 +26,7 @@ const Lead = new mongoose.Schema(
       enum: ["new", "contacted", "interested", "scheduled", "converted", "rejected"],
       default: "new",
     },
-    rejectionReason: { type: String },
+    rejectionReason: { type: String }, // should be in separate model, which has its own crud
     paymentStatus: {
       type: String,
       enum: ["unpaid", "partial", "paid"],
