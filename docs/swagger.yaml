@@ -2517,6 +2517,180 @@ paths:
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
+  /users/teachers/search:
+    get:
+      tags: [Users]
+      summary: Search teachers
+      description: |
+        Searches users with role `teacher` across multiple fields and returns paginated results.
+
+        **Free-text search (`q`)** performs a case-insensitive regex match against:
+        - `firstName` — first name
+        - `lastName` — last name
+        - `source` — lead source / referral label
+        - `gender` — `male` or `female`
+        - `phone` — matched numerically (only when `q` is a valid number)
+        - `age` — matched numerically (only when `q` is a valid number)
+
+        **Field filters** can be used alongside or instead of `q`:
+        | Parameter | Type | Behaviour |
+        |-----------|------|-----------|
+        | `firstName` | string | Partial, case-insensitive match |
+        | `lastName` | string | Partial, case-insensitive match |
+        | `phone` | integer | Exact numeric match |
+        | `gender` | string | Exact match (`male` / `female`) |
+        | `source` | string | Partial, case-insensitive match |
+        | `age` | integer | Exact match |
+        | `minAge` | integer | Age ≥ value |
+        | `maxAge` | integer | Age ≤ value |
+
+        When both `q` and field filters are provided, **both** conditions must be satisfied (AND logic).
+
+        **Access:** Admin only.
+      operationId: searchTeachers
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Free-text search term (case-insensitive). Matched against firstName, lastName, source, gender, and numerically against phone and age.
+          schema:
+            type: string
+            example: "Ali"
+        - name: firstName
+          in: query
+          required: false
+          description: Filter by first name (partial match)
+          schema:
+            type: string
+            example: "Jasur"
+        - name: lastName
+          in: query
+          required: false
+          description: Filter by last name (partial match)
+          schema:
+            type: string
+            example: "Toshmatov"
+        - name: phone
+          in: query
+          required: false
+          description: Filter by exact phone number
+          schema:
+            type: integer
+            example: 998901234567
+        - name: gender
+          in: query
+          required: false
+          description: Filter by gender
+          schema:
+            type: string
+            enum: [male, female]
+        - name: source
+          in: query
+          required: false
+          description: Filter by source (partial match)
+          schema:
+            type: string
+            example: "instagram"
+        - name: age
+          in: query
+          required: false
+          description: Filter by exact age
+          schema:
+            type: integer
+            example: 28
+        - name: minAge
+          in: query
+          required: false
+          description: Minimum age (inclusive)
+          schema:
+            type: integer
+            example: 22
+        - name: maxAge
+          in: query
+          required: false
+          description: Maximum age (inclusive)
+          schema:
+            type: integer
+            example: 40
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: Page number (1-based)
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Results per page (max 100)
+      responses:
+        "200":
+          description: Matching teachers returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/User"
+                  total:
+                    type: integer
+                    example: 3
+                  page:
+                    type: integer
+                    example: 1
+                  limit:
+                    type: integer
+                    example: 20
+                  totalPages:
+                    type: integer
+                    example: 1
+                  hasNextPage:
+                    type: boolean
+                    example: false
+                  hasPrevPage:
+                    type: boolean
+                    example: false
+                  code:
+                    type: string
+                    example: "usersFound"
+                  message:
+                    type: string
+                    example: "Foydalanuvchilar ro'yxati olindi"
+              examples:
+                byName:
+                  summary: Search by name fragment
+                  value:
+                    users:
+                      - _id: "664f1a2b3c4d5e6f7a8b9c0d"
+                        firstName: "Alisher"
+                        lastName: "Nazarov"
+                        phone: 998901234567
+                        role: "teacher"
+                        gender: "male"
+                        age: 32
+                    total: 1
+                    page: 1
+                    limit: 20
+                    totalPages: 1
+                    hasNextPage: false
+                    hasPrevPage: false
+                    code: "usersFound"
+                    message: "Foydalanuvchilar ro'yxati olindi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
   /users/teachers:
     get:
       tags: [Users]
@@ -2579,6 +2753,188 @@ paths:
                   message:
                     type: string
                     example: "Foydalanuvchilar ro'yxati olindi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /users/students/search:
+    get:
+      tags: [Users]
+      summary: Search students
+      description: |
+        Searches users with role `student` across multiple fields and returns paginated results.
+        Each matching student includes their `enrollments` array with populated `group` data.
+
+        **Free-text search (`q`)** performs a case-insensitive regex match against:
+        - `firstName` — first name
+        - `lastName` — last name
+        - `source` — lead source / referral label
+        - `gender` — `male` or `female`
+        - `phone` — matched numerically (only when `q` is a valid number)
+        - `age` — matched numerically (only when `q` is a valid number)
+
+        **Field filters** can be used alongside or instead of `q`:
+        | Parameter | Type | Behaviour |
+        |-----------|------|-----------|
+        | `firstName` | string | Partial, case-insensitive match |
+        | `lastName` | string | Partial, case-insensitive match |
+        | `phone` | integer | Exact numeric match |
+        | `gender` | string | Exact match (`male` / `female`) |
+        | `source` | string | Partial, case-insensitive match |
+        | `age` | integer | Exact match |
+        | `minAge` | integer | Age ≥ value |
+        | `maxAge` | integer | Age ≤ value |
+
+        When both `q` and field filters are provided, **both** conditions must be satisfied (AND logic).
+
+        **Access:** Admin only.
+      operationId: searchStudents
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Free-text search term (case-insensitive). Matched against firstName, lastName, source, gender, and numerically against phone and age.
+          schema:
+            type: string
+            example: "Kamola"
+        - name: firstName
+          in: query
+          required: false
+          description: Filter by first name (partial match)
+          schema:
+            type: string
+            example: "Kamola"
+        - name: lastName
+          in: query
+          required: false
+          description: Filter by last name (partial match)
+          schema:
+            type: string
+            example: "Yusupova"
+        - name: phone
+          in: query
+          required: false
+          description: Filter by exact phone number
+          schema:
+            type: integer
+            example: 998909876543
+        - name: gender
+          in: query
+          required: false
+          description: Filter by gender
+          schema:
+            type: string
+            enum: [male, female]
+        - name: source
+          in: query
+          required: false
+          description: Filter by source (partial match)
+          schema:
+            type: string
+            example: "referral"
+        - name: age
+          in: query
+          required: false
+          description: Filter by exact age
+          schema:
+            type: integer
+            example: 18
+        - name: minAge
+          in: query
+          required: false
+          description: Minimum age (inclusive)
+          schema:
+            type: integer
+            example: 14
+        - name: maxAge
+          in: query
+          required: false
+          description: Maximum age (inclusive)
+          schema:
+            type: integer
+            example: 25
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: Page number (1-based)
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Results per page (max 100)
+      responses:
+        "200":
+          description: Matching students returned with their enrollments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/StudentWithEnrollments"
+                  total:
+                    type: integer
+                    example: 12
+                  page:
+                    type: integer
+                    example: 1
+                  limit:
+                    type: integer
+                    example: 20
+                  totalPages:
+                    type: integer
+                    example: 1
+                  hasNextPage:
+                    type: boolean
+                    example: false
+                  hasPrevPage:
+                    type: boolean
+                    example: false
+                  code:
+                    type: string
+                    example: "usersFound"
+                  message:
+                    type: string
+                    example: "Foydalanuvchilar ro'yxati olindi"
+              examples:
+                byAge:
+                  summary: Search teenagers
+                  value:
+                    users:
+                      - _id: "664f1a2b3c4d5e6f7a8b9c11"
+                        firstName: "Kamola"
+                        lastName: "Yusupova"
+                        phone: 998909876543
+                        role: "student"
+                        gender: "female"
+                        age: 17
+                        enrollments:
+                          - _id: "664f1a2b3c4d5e6f7a8b9e01"
+                            group:
+                              _id: "664f1a2b3c4d5e6f7a8b9d01"
+                              name: "Ingliz tili A1"
+                              price: 350000
+                            status: "active"
+                    total: 12
+                    page: 1
+                    limit: 20
+                    totalPages: 1
+                    hasNextPage: false
+                    hasPrevPage: false
+                    code: "usersFound"
+                    message: "Foydalanuvchilar ro'yxati olindi"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -2785,6 +3141,174 @@ paths:
   # ══════════════════════════════════════════
   # GROUPS
   # ══════════════════════════════════════════
+
+  /groups/search:
+    get:
+      tags: [Groups]
+      summary: Search groups
+      description: |
+        Searches groups across multiple fields and returns paginated results.
+        Each result has the `teacher` field populated (firstName, lastName, phone).
+
+        **Free-text search (`q`)** performs a case-insensitive regex match against:
+        - `name` — group name
+        - `description` — group description
+        - `room` — classroom or room identifier
+        - `schedule.time` — time string, e.g. `"09:00"`
+        - `price` — matched numerically (only when `q` is a valid number)
+        - Teacher `firstName` / `lastName` — admin only (teachers are already scoped)
+
+        **Field filters** can be used alongside or instead of `q`:
+        | Parameter | Type | Behaviour |
+        |-----------|------|-----------|
+        | `teacher` | ObjectId | Exact match by teacher `_id` (admin only; teachers see only their own groups) |
+        | `room` | string | Partial, case-insensitive match |
+        | `day` | string | Exact match against `schedule.days` array (`Monday` … `Sunday`) |
+        | `price` | number | Exact price match |
+        | `minPrice` | number | Price ≥ value |
+        | `maxPrice` | number | Price ≤ value |
+
+        When both `q` and field filters are provided, **both** conditions must be satisfied (AND logic).
+
+        **Access:** Admin (all groups) · Teacher (own groups only).
+      operationId: searchGroups
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: |
+            Free-text search term. Case-insensitive regex matched against name, description, room,
+            schedule.time, teacher name (admin), and numerically against price.
+          schema:
+            type: string
+            example: "Ingliz"
+        - name: teacher
+          in: query
+          required: false
+          description: Filter by teacher ObjectId (admin only; ignored for teacher role)
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c0d"
+        - name: room
+          in: query
+          required: false
+          description: Filter by room (partial match)
+          schema:
+            type: string
+            example: "201"
+        - name: day
+          in: query
+          required: false
+          description: Filter by schedule day (exact match against the days array)
+          schema:
+            type: string
+            enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
+            example: "Monday"
+        - name: price
+          in: query
+          required: false
+          description: Filter by exact monthly price
+          schema:
+            type: number
+            example: 350000
+        - name: minPrice
+          in: query
+          required: false
+          description: Minimum monthly price (inclusive)
+          schema:
+            type: number
+            example: 200000
+        - name: maxPrice
+          in: query
+          required: false
+          description: Maximum monthly price (inclusive)
+          schema:
+            type: number
+            example: 600000
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: Page number (1-based)
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Results per page (max 100)
+      responses:
+        "200":
+          description: Matching groups returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  groups:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Group"
+                  total:
+                    type: integer
+                    example: 4
+                  page:
+                    type: integer
+                    example: 1
+                  limit:
+                    type: integer
+                    example: 20
+                  totalPages:
+                    type: integer
+                    example: 1
+                  hasNextPage:
+                    type: boolean
+                    example: false
+                  hasPrevPage:
+                    type: boolean
+                    example: false
+                  code:
+                    type: string
+                    example: "groupsFound"
+                  message:
+                    type: string
+                    example: "Guruhlar ro'yxati olindi"
+              examples:
+                byDayAndPrice:
+                  summary: Monday groups under 400 000 UZS
+                  value:
+                    groups:
+                      - _id: "664f1a2b3c4d5e6f7a8b9d01"
+                        name: "Ingliz tili A1"
+                        description: "Boshlang'ich daraja"
+                        price: 350000
+                        room: "101"
+                        schedule:
+                          days: ["Monday", "Wednesday", "Friday"]
+                          time: "09:00"
+                        teacher:
+                          _id: "664f1a2b3c4d5e6f7a8b9c0d"
+                          firstName: "Alisher"
+                          lastName: "Nazarov"
+                          phone: 998901234567
+                    total: 4
+                    page: 1
+                    limit: 20
+                    totalPages: 1
+                    hasNextPage: false
+                    hasPrevPage: false
+                    code: "groupsFound"
+                    message: "Guruhlar ro'yxati olindi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /groups:
     get:
@@ -3415,6 +3939,224 @@ paths:
   # ══════════════════════════════════════════
   # PAYMENTS
   # ══════════════════════════════════════════
+
+  /payments/search:
+    get:
+      tags: [Payments]
+      summary: Search payments
+      description: |
+        Searches payment records across multiple fields and returns paginated results.
+        Results are populated with `student` (firstName, lastName, phone), `enrollment`
+        (group, status), and `createdBy` (firstName, lastName).
+
+        **Free-text search (`q`)** performs a case-insensitive regex match against:
+        - `note` — free-text note on the payment
+        - `amount` — matched numerically (only when `q` is a valid number)
+        - Student `firstName` / `lastName` — matched by resolving student references
+        - Student `phone` — matched numerically (only when `q` is a valid number)
+
+        **Field filters** can be used alongside or instead of `q`:
+        | Parameter | Type | Behaviour |
+        |-----------|------|-----------|
+        | `student` | ObjectId | Exact match by student `_id` |
+        | `enrollment` | ObjectId | Exact match by enrollment `_id` |
+        | `status` | string | Exact match (`paid` / `pending` / `overdue`) |
+        | `amount` | number | Exact amount match |
+        | `minAmount` | number | Amount ≥ value |
+        | `maxAmount` | number | Amount ≤ value |
+        | `month` | string | Month in `YYYY-MM` format — matches all payments for that calendar month |
+        | `from` | string | `paidAt` ≥ this ISO date |
+        | `to` | string | `paidAt` ≤ this ISO date |
+
+        When both `q` and field filters are provided, **both** conditions must be satisfied (AND logic).
+
+        **Role scoping:**
+        - `student` — automatically filtered to own payments; `student` filter param is ignored
+        - `teacher` / `admin` — can filter by any student
+
+        **Access:** Admin · Teacher · Student (own payments only).
+      operationId: searchPayments
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: |
+            Free-text search term. Case-insensitive regex matched against note, student name,
+            and numerically against amount and student phone.
+          schema:
+            type: string
+            example: "Kamola"
+        - name: status
+          in: query
+          required: false
+          description: Filter by payment status
+          schema:
+            type: string
+            enum: [paid, pending, overdue]
+        - name: student
+          in: query
+          required: false
+          description: Filter by student ObjectId (ignored for student role — always scoped to self)
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c11"
+        - name: enrollment
+          in: query
+          required: false
+          description: Filter by enrollment ObjectId
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9e01"
+        - name: amount
+          in: query
+          required: false
+          description: Filter by exact payment amount
+          schema:
+            type: number
+            example: 350000
+        - name: minAmount
+          in: query
+          required: false
+          description: Minimum payment amount (inclusive)
+          schema:
+            type: number
+            example: 100000
+        - name: maxAmount
+          in: query
+          required: false
+          description: Maximum payment amount (inclusive)
+          schema:
+            type: number
+            example: 500000
+        - name: month
+          in: query
+          required: false
+          description: Calendar month to filter payments by, in `YYYY-MM` format
+          schema:
+            type: string
+            example: "2026-04"
+        - name: from
+          in: query
+          required: false
+          description: Filter payments where `paidAt` is on or after this ISO date/datetime
+          schema:
+            type: string
+            format: date
+            example: "2026-04-01"
+        - name: to
+          in: query
+          required: false
+          description: Filter payments where `paidAt` is on or before this ISO date/datetime
+          schema:
+            type: string
+            format: date
+            example: "2026-04-30"
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: Page number (1-based)
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Results per page (max 100)
+      responses:
+        "200":
+          description: Matching payment records returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  payments:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Payment"
+                  total:
+                    type: integer
+                    example: 7
+                  page:
+                    type: integer
+                    example: 1
+                  limit:
+                    type: integer
+                    example: 20
+                  totalPages:
+                    type: integer
+                    example: 1
+                  hasNextPage:
+                    type: boolean
+                    example: false
+                  hasPrevPage:
+                    type: boolean
+                    example: false
+                  code:
+                    type: string
+                    example: "paymentsFound"
+                  message:
+                    type: string
+                    example: "To'lovlar ro'yxati olindi"
+              examples:
+                byMonthAndStatus:
+                  summary: Paid payments for April 2026
+                  value:
+                    payments:
+                      - _id: "664f1a2b3c4d5e6f7a8b9f01"
+                        amount: 350000
+                        status: "paid"
+                        paidAt: "2026-04-05T09:15:00.000Z"
+                        month: "2026-04-01T00:00:00.000Z"
+                        note: "Aprel oyi to'lovi"
+                        student:
+                          _id: "664f1a2b3c4d5e6f7a8b9c11"
+                          firstName: "Kamola"
+                          lastName: "Yusupova"
+                          phone: 998909876543
+                        enrollment:
+                          _id: "664f1a2b3c4d5e6f7a8b9e01"
+                          status: "active"
+                    total: 7
+                    page: 1
+                    limit: 20
+                    totalPages: 1
+                    hasNextPage: false
+                    hasPrevPage: false
+                    code: "paymentsFound"
+                    message: "To'lovlar ro'yxati olindi"
+                byStudentName:
+                  summary: Payments for student by name
+                  value:
+                    payments:
+                      - _id: "664f1a2b3c4d5e6f7a8b9f02"
+                        amount: 300000
+                        status: "pending"
+                        month: "2026-03-01T00:00:00.000Z"
+                        student:
+                          _id: "664f1a2b3c4d5e6f7a8b9c11"
+                          firstName: "Kamola"
+                          lastName: "Yusupova"
+                          phone: 998909876543
+                    total: 2
+                    page: 1
+                    limit: 20
+                    totalPages: 1
+                    hasNextPage: false
+                    hasPrevPage: false
+                    code: "paymentsFound"
+                    message: "To'lovlar ro'yxati olindi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /payments:
     get:
@@ -4238,6 +4980,233 @@ paths:
   # ══════════════════════════════════════════
   # LEADS
   # ══════════════════════════════════════════
+
+  /leads/search:
+    get:
+      tags: [Leads]
+      summary: Search leads
+      description: |
+        Searches leads across multiple fields and returns paginated results.
+        Results are populated with `group` (name, price) and `createdBy` (firstName, lastName).
+
+        **Free-text search (`q`)** performs a case-insensitive regex match against:
+        - `firstName` — lead's first name
+        - `telegramId` — Telegram user ID string
+        - `profession` — stated profession
+        - `interest` — stated interest / desired course
+        - `notes` — internal notes
+        - `level` — self-reported proficiency level
+        - `phone` — matched numerically (only when `q` is a valid number)
+        - `age` — matched numerically (only when `q` is a valid number)
+
+        **Field filters** can be used alongside or instead of `q`:
+        | Parameter | Type | Behaviour |
+        |-----------|------|-----------|
+        | `status` | string | Exact match (`new` / `contacted` / `interested` / `scheduled` / `converted` / `rejected`) |
+        | `source` | string | Exact match (`telegram` / `instagram` / `referral` / `offline` / `other`) |
+        | `paymentStatus` | string | Exact match (`unpaid` / `partial` / `paid`) |
+        | `gender` | string | Exact match (`male` / `female`) |
+        | `group` | ObjectId | Exact match by group `_id` |
+        | `level` | string | Partial, case-insensitive match |
+        | `profession` | string | Partial, case-insensitive match |
+        | `age` | integer | Exact age match |
+        | `minAge` | integer | Age ≥ value |
+        | `maxAge` | integer | Age ≤ value |
+
+        When both `q` and field filters are provided, **both** conditions must be satisfied (AND logic).
+
+        **Access:** Admin · Teacher.
+      operationId: searchLeads
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: |
+            Free-text search term. Case-insensitive regex matched against firstName, telegramId,
+            profession, interest, notes, level, and numerically against phone and age.
+          schema:
+            type: string
+            example: "Matematik"
+        - name: status
+          in: query
+          required: false
+          description: Filter by lead status
+          schema:
+            type: string
+            enum: [new, contacted, interested, scheduled, converted, rejected]
+        - name: source
+          in: query
+          required: false
+          description: Filter by traffic source
+          schema:
+            type: string
+            enum: [telegram, instagram, referral, offline, other]
+        - name: paymentStatus
+          in: query
+          required: false
+          description: Filter by payment status
+          schema:
+            type: string
+            enum: [unpaid, partial, paid]
+        - name: gender
+          in: query
+          required: false
+          description: Filter by gender
+          schema:
+            type: string
+            enum: [male, female]
+        - name: group
+          in: query
+          required: false
+          description: Filter by interested group ObjectId
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9d01"
+        - name: level
+          in: query
+          required: false
+          description: Filter by self-reported level (partial match)
+          schema:
+            type: string
+            example: "A2"
+        - name: profession
+          in: query
+          required: false
+          description: Filter by profession (partial match)
+          schema:
+            type: string
+            example: "dasturchi"
+        - name: age
+          in: query
+          required: false
+          description: Filter by exact age
+          schema:
+            type: integer
+            example: 22
+        - name: minAge
+          in: query
+          required: false
+          description: Minimum age (inclusive)
+          schema:
+            type: integer
+            example: 18
+        - name: maxAge
+          in: query
+          required: false
+          description: Maximum age (inclusive)
+          schema:
+            type: integer
+            example: 35
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: Page number (1-based)
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Results per page (max 100)
+      responses:
+        "200":
+          description: Matching leads returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  leads:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Lead"
+                  total:
+                    type: integer
+                    example: 5
+                  page:
+                    type: integer
+                    example: 1
+                  limit:
+                    type: integer
+                    example: 20
+                  totalPages:
+                    type: integer
+                    example: 1
+                  hasNextPage:
+                    type: boolean
+                    example: false
+                  hasPrevPage:
+                    type: boolean
+                    example: false
+                  code:
+                    type: string
+                    example: "leadsFound"
+                  message:
+                    type: string
+                    example: "Lidlar ro'yxati olindi"
+              examples:
+                byNameAndStatus:
+                  summary: New leads interested in maths
+                  value:
+                    leads:
+                      - _id: "664f1a2b3c4d5e6f7a8b9b01"
+                        firstName: "Sardor"
+                        phone: 998911234567
+                        gender: "male"
+                        age: 22
+                        profession: "Talaba"
+                        interest: "Matematika"
+                        source: "instagram"
+                        status: "new"
+                        paymentStatus: "unpaid"
+                        level: "A2"
+                        group:
+                          _id: "664f1a2b3c4d5e6f7a8b9d01"
+                          name: "Matematika Olympiad"
+                          price: 400000
+                        createdBy:
+                          _id: "664f1a2b3c4d5e6f7a8b9c0d"
+                          firstName: "Alisher"
+                          lastName: "Nazarov"
+                    total: 5
+                    page: 1
+                    limit: 20
+                    totalPages: 1
+                    hasNextPage: false
+                    hasPrevPage: false
+                    code: "leadsFound"
+                    message: "Lidlar ro'yxati olindi"
+                byAgeRange:
+                  summary: Leads aged 18–25
+                  value:
+                    leads:
+                      - _id: "664f1a2b3c4d5e6f7a8b9b02"
+                        firstName: "Dilnoza"
+                        phone: 998907654321
+                        gender: "female"
+                        age: 20
+                        status: "contacted"
+                        paymentStatus: "unpaid"
+                        source: "telegram"
+                    total: 3
+                    page: 1
+                    limit: 20
+                    totalPages: 1
+                    hasNextPage: false
+                    hasPrevPage: false
+                    code: "leadsFound"
+                    message: "Lidlar ro'yxati olindi"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /leads:
     get:
