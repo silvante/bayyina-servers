@@ -12,6 +12,7 @@ const Notification = require("./src/models/Notification");
 const Record = require("./src/models/Record");
 const Counter = require("./src/models/Counter");
 const VerificationCode = require("./src/models/VerificationCode");
+const Salary = require("./src/models/Salary");
 
 const STUDENT_COUNT = 500;
 const TEACHER_COUNT = 30;
@@ -19,6 +20,7 @@ const GROUP_COUNT = 40;
 const LEAD_COUNT = 150;
 const NOTIFICATION_COUNT = 60;
 const ATTENDANCE_WINDOW_DAYS = 60;
+const SALARY_MONTHS = 4;
 
 const FIRST_NAMES_MALE = [
   "Ali", "Akbar", "Bekzod", "Dilshod", "Eldor", "Fazliddin", "Hasan", "Husan",
@@ -215,6 +217,7 @@ async function main() {
     Record.deleteMany({}),
     Counter.deleteMany({}),
     VerificationCode.deleteMany({}),
+    Salary.deleteMany({}),
   ]);
   console.log("Tozalandi ✅");
 
@@ -288,6 +291,14 @@ async function main() {
     const teacher = teachers[i % teachers.length];
     const sched = pick(SCHEDULE_OPTIONS);
     const price = pick([200000, 250000, 300000, 350000, 400000, 500000]);
+    const salaryType = pickWeighted(
+      ["percentage", "per_student", "fixed"],
+      [60, 25, 15]
+    );
+    let salaryValue;
+    if (salaryType === "percentage") salaryValue = pick([25, 30, 35, 40, 45, 50]);
+    else if (salaryType === "per_student") salaryValue = pick([30000, 50000, 70000, 100000]);
+    else salaryValue = pick([1500000, 2000000, 2500000, 3000000, 3500000, 4000000]);
     groupDocs.push({
       name: `${tpl.subject} — ${lvl} (${i + 1}-guruh)`,
       description: `${tpl.subject} fanidan ${lvl} darajadagi guruh.`,
@@ -295,6 +306,8 @@ async function main() {
       teacher: teacher._id,
       schedule: { days: sched.days, time: sched.time },
       room: pick(ROOMS),
+      salaryType,
+      salaryValue,
       createdBy: admin._id,
     });
   }
@@ -426,6 +439,130 @@ async function main() {
     await Payment.insertMany(paymentDocs.slice(i, i + PAY_CHUNK), { ordered: false });
   }
   console.log(`✅ ${paymentDocs.length} to'lov`);
+
+  // ========== SALARIES ==========
+  console.log("Oyliklar yaratilmoqda...");
+  const enrollmentToGroup = new Map(
+    enrollments.map((en) => [String(en._id), String(en.group)])
+  );
+  const activeStudentsByGroup = new Map();
+  for (const en of enrollments) {
+    if (en.status !== "active") continue;
+    const k = String(en.group);
+    activeStudentsByGroup.set(k, (activeStudentsByGroup.get(k) || 0) + 1);
+  }
+
+  const monthKey = (d) => `${d.getFullYear()}-${d.getMonth()}`;
+  const revenueByGroupMonth = new Map();
+  const paidStudentsByGroupMonth = new Map();
+  for (const p of paymentDocs) {
+    if (p.status !== "paid") continue;
+    const gid = enrollmentToGroup.get(String(p.enrollment));
+    if (!gid) continue;
+    const k = `${gid}|${monthKey(p.month)}`;
+    revenueByGroupMonth.set(k, (revenueByGroupMonth.get(k) || 0) + p.amount);
+    if (!paidStudentsByGroupMonth.has(k)) paidStudentsByGroupMonth.set(k, new Set());
+    paidStudentsByGroupMonth.get(k).add(String(p.student));
+  }
+
+  const groupsByTeacher = new Map();
+  for (const g of groups) {
+    const tid = String(g.teacher);
+    if (!groupsByTeacher.has(tid)) groupsByTeacher.set(tid, []);
+    groupsByTeacher.get(tid).push(g);
+  }
+
+  const salaryDocs = [];
+  for (const t of teachers) {
+    const tGroups = groupsByTeacher.get(String(t._id)) || [];
+    if (!tGroups.length) continue;
+
+    for (let m = SALARY_MONTHS; m >= 1; m--) {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - m, 1);
+      const mKey = monthKey(monthDate);
+
+      const breakdown = tGroups.map((g) => {
+        const gid = String(g._id);
+        const studentCount = activeStudentsByGroup.get(gid) || 0;
+        const k = `${gid}|${mKey}`;
+        const groupRevenue = revenueByGroupMonth.get(k) || 0;
+        const paidStudentsCount = (paidStudentsByGroupMonth.get(k) || new Set()).size;
+
+        let amount = 0;
+        if (g.salaryType === "percentage") {
+          amount = (groupRevenue * g.salaryValue) / 100;
+        } else if (g.salaryType === "per_student") {
+          amount = paidStudentsCount * g.salaryValue;
+        } else if (g.salaryType === "fixed") {
+          amount = g.salaryValue;
+        }
+
+        return {
+          group: g._id,
+          groupName: g.name,
+          salaryType: g.salaryType,
+          salaryValue: g.salaryValue,
+          studentCount,
+          paidStudentsCount,
+          groupRevenue: Math.round(groupRevenue),
+          amount: Math.round(amount),
+        };
+      });
+
+      const totalAmount = breakdown.reduce((s, b) => s + b.amount, 0);
+      const bonus = Math.random() < 0.18 ? pick([100000, 200000, 300000, 500000]) : 0;
+      const deduction = Math.random() < 0.1 ? pick([50000, 100000, 150000]) : 0;
+      const netAmount = Math.max(0, Math.round(totalAmount + bonus - deduction));
+
+      const status = m === 1
+        ? pickWeighted(["paid", "pending"], [45, 55])
+        : pickWeighted(["paid", "pending"], [88, 12]);
+
+      const paidAt = status === "paid"
+        ? new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, randInt(1, 15))
+        : undefined;
+
+      const note = pickWeighted(
+        [
+          "",
+          "Oylik o'z vaqtida hisoblandi",
+          "Bonus: yaxshi natija uchun",
+          "Bir kunlik ishga chiqmagani uchun chegirma",
+          "Davomat asosida hisoblandi",
+        ],
+        [70, 10, 8, 5, 7]
+      );
+
+      salaryDocs.push({
+        teacher: t._id,
+        month: monthDate,
+        groups: breakdown,
+        totalAmount: Math.round(totalAmount),
+        bonus,
+        deduction,
+        netAmount,
+        status,
+        ...(paidAt && { paidAt }),
+        ...(note && { note }),
+        createdBy: admin._id,
+      });
+    }
+  }
+
+  const SAL_CHUNK = 500;
+  let salInserted = 0;
+  for (let i = 0; i < salaryDocs.length; i += SAL_CHUNK) {
+    try {
+      const inserted = await Salary.insertMany(
+        salaryDocs.slice(i, i + SAL_CHUNK),
+        { ordered: false }
+      );
+      salInserted += inserted.length;
+    } catch (err) {
+      if (err.insertedDocs) salInserted += err.insertedDocs.length;
+    }
+  }
+  console.log(`✅ ${salInserted} oylik`);
 
   // ========== ATTENDANCE ==========
   console.log("Davomatlar yaratilmoqda...");
