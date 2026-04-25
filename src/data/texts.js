@@ -59,6 +59,27 @@ const texts = {
   leadsFound: "Murojaatlar ro'yxati olindi",
   invalidLeadStatus: "Murojaat holati noto'g'ri",
 
+  // Lead Sources
+  leadSourceCreated: "Manba muvaffaqiyatli yaratildi",
+  leadSourceUpdated: "Manba muvaffaqiyatli yangilandi",
+  leadSourceDeleted: "Manba muvaffaqiyatli o'chirildi",
+  leadSourceNotFound: "Manba topilmadi",
+  leadSourcesFound: "Manbalar ro'yxati olindi",
+
+  // Course Types
+  courseTypeCreated: "Kurs turi muvaffaqiyatli yaratildi",
+  courseTypeUpdated: "Kurs turi muvaffaqiyatli yangilandi",
+  courseTypeDeleted: "Kurs turi muvaffaqiyatli o'chirildi",
+  courseTypeNotFound: "Kurs turi topilmadi",
+  courseTypesFound: "Kurs turlari ro'yxati olindi",
+
+  // Rejection Reasons
+  rejectionReasonCreated: "Rad etish sababi muvaffaqiyatli yaratildi",
+  rejectionReasonUpdated: "Rad etish sababi muvaffaqiyatli yangilandi",
+  rejectionReasonDeleted: "Rad etish sababi muvaffaqiyatli o'chirildi",
+  rejectionReasonNotFound: "Rad etish sababi topilmadi",
+  rejectionReasonsFound: "Rad etish sabablari ro'yxati olindi",
+
   // Payments
   paymentCreated: "To'lov muvaffaqiyatli yaratildi",
   paymentUpdated: "To'lov muvaffaqiyatli yangilandi",

@@ -100,6 +100,12 @@ tags:
 
       Salary calculation only counts payments with `status = "paid"` whose
       `month` falls inside the salary record's month.
+  - name: Lead Sources
+    description: Lead source management — configurable list of channels (Telegram, Instagram, referral, etc.) that admins can manage. **Admin only.**
+  - name: Course Types
+    description: Course type management — configurable course categories with type and direction fields used for lead interest tracking and statistics. **Admin only.**
+  - name: Rejection Reasons
+    description: Rejection reason management — configurable list of reasons for rejecting a lead. **Admin only.**
   - name: Records
     description: |
       Event timeline — **admin only**.
@@ -1058,17 +1064,12 @@ components:
           minimum: 1
           maximum: 120
           example: 19
-        profession:
-          type: string
-          nullable: true
-          description: Current profession or occupation
-          example: "Student"
         source:
-          type: string
-          enum: [telegram, instagram, referral, offline, other]
-          default: other
-          description: How the lead found out about the center
-          example: "instagram"
+          oneOf:
+            - type: string
+              nullable: true
+            - $ref: "#/components/schemas/LeadSource"
+          description: Populated lead source (how the lead found out about the center)
         interest:
           type: string
           nullable: true
@@ -1084,22 +1085,12 @@ components:
           nullable: true
           description: Timestamp of the first time the referral link was hit. Null until clicked.
           example: "2026-04-14T10:15:00.000Z"
-        group:
+        courseType:
           oneOf:
             - type: string
               nullable: true
-            - type: object
-              properties:
-                _id:
-                  type: string
-                  example: "664f1a2b3c4d5e6f7a8b9c10"
-                name:
-                  type: string
-                  example: "English — Oqshom 1"
-                price:
-                  type: number
-                  example: 450000
-          description: Populated group the lead is interested in (optional)
+            - $ref: "#/components/schemas/CourseType"
+          description: Populated course type the lead is interested in (optional)
         level:
           type: string
           nullable: true
@@ -1119,10 +1110,11 @@ components:
             - `rejected` — declined (see `rejectionReason`)
           example: "contacted"
         rejectionReason:
-          type: string
-          nullable: true
-          description: Why the lead was rejected (required context when `status = rejected`)
-          example: "Narx juda qimmat"
+          oneOf:
+            - type: string
+              nullable: true
+            - $ref: "#/components/schemas/RejectionReason"
+          description: Populated rejection reason (required context when `status = rejected`)
         paymentStatus:
           type: string
           enum: [unpaid, partial, paid]
@@ -1195,20 +1187,16 @@ components:
           minimum: 1
           maximum: 120
           example: 19
-        profession:
-          type: string
-          example: "Student"
         source:
           type: string
-          enum: [telegram, instagram, referral, offline, other]
-          default: other
-          example: "telegram"
+          description: ObjectId of the LeadSource
+          example: "664f1a2b3c4d5e6f7a8b9c11"
         interest:
           type: string
           example: "English evening course"
-        group:
+        courseType:
           type: string
-          description: ObjectId of the Group the lead is interested in
+          description: ObjectId of the CourseType the lead is interested in
           example: "664f1a2b3c4d5e6f7a8b9c10"
         level:
           type: string
@@ -1220,7 +1208,8 @@ components:
           example: "new"
         rejectionReason:
           type: string
-          example: "Narx qimmat"
+          description: ObjectId of the RejectionReason
+          example: "664f1a2b3c4d5e6f7a8b9c12"
         paymentStatus:
           type: string
           enum: [unpaid, partial, paid]
@@ -1256,18 +1245,16 @@ components:
         age:
           type: integer
           example: 20
-        profession:
-          type: string
-          example: "Engineer"
         source:
           type: string
-          enum: [telegram, instagram, referral, offline, other]
-          example: "referral"
+          description: ObjectId of the LeadSource
+          example: "664f1a2b3c4d5e6f7a8b9c11"
         interest:
           type: string
           example: "Korean A1 morning"
-        group:
+        courseType:
           type: string
+          description: ObjectId of the CourseType
           example: "664f1a2b3c4d5e6f7a8b9c10"
         level:
           type: string
@@ -1278,7 +1265,8 @@ components:
           example: "scheduled"
         rejectionReason:
           type: string
-          example: "Boshqa markazni tanladi"
+          description: ObjectId of the RejectionReason
+          example: "664f1a2b3c4d5e6f7a8b9c12"
         paymentStatus:
           type: string
           enum: [unpaid, partial, paid]
@@ -1290,6 +1278,113 @@ components:
         notes:
           type: string
           example: "Onasi qayta qo'ng'iroq qiladi"
+
+    # ── LeadSource ───────────────────────────────
+    LeadSource:
+      type: object
+      description: A configurable lead acquisition channel (e.g. Telegram, Instagram).
+      properties:
+        _id:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c11"
+        name:
+          type: string
+          description: Display name of the source
+          example: "Telegram"
+        slug:
+          type: string
+          description: Lowercase unique identifier
+          example: "telegram"
+        createdBy:
+          oneOf:
+            - type: string
+              nullable: true
+            - type: object
+              properties:
+                _id: { type: string, example: "664f1a2b3c4d5e6f7a8b9c0f" }
+                firstName: { type: string, example: "Sarvinoz" }
+                lastName: { type: string, example: "Yusupova" }
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-04-01T08:00:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-04-01T08:00:00.000Z"
+
+    # ── CourseType ───────────────────────────────
+    CourseType:
+      type: object
+      description: A configurable course category used to track lead interest (e.g. IELTS / English / Advanced).
+      properties:
+        _id:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c10"
+        name:
+          type: string
+          description: Display name
+          example: "IELTS Tayyorlov"
+        type:
+          type: string
+          description: Course subject area
+          example: "English"
+        direction:
+          type: string
+          description: Level or direction
+          example: "Advanced"
+        createdBy:
+          oneOf:
+            - type: string
+              nullable: true
+            - type: object
+              properties:
+                _id: { type: string, example: "664f1a2b3c4d5e6f7a8b9c0f" }
+                firstName: { type: string, example: "Sarvinoz" }
+                lastName: { type: string, example: "Yusupova" }
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-04-01T08:00:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-04-01T08:00:00.000Z"
+
+    # ── RejectionReason ──────────────────────────
+    RejectionReason:
+      type: object
+      description: A configurable reason for rejecting a lead.
+      properties:
+        _id:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c12"
+        title:
+          type: string
+          description: Short title of the rejection reason
+          example: "Narx juda qimmat"
+        description:
+          type: string
+          nullable: true
+          description: Additional detail
+          example: "Lead said the price is too high compared to competitors"
+        createdBy:
+          oneOf:
+            - type: string
+              nullable: true
+            - type: object
+              properties:
+                _id: { type: string, example: "664f1a2b3c4d5e6f7a8b9c0f" }
+                firstName: { type: string, example: "Sarvinoz" }
+                lastName: { type: string, example: "Yusupova" }
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-04-01T08:00:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-04-01T08:00:00.000Z"
 
     # ── Notification ─────────────────────────────
     NotificationFeedback:
@@ -4987,12 +5082,11 @@ paths:
       summary: Search leads
       description: |
         Searches leads across multiple fields and returns paginated results.
-        Results are populated with `group` (name, price) and `createdBy` (firstName, lastName).
+        Results are populated with `source`, `courseType`, `rejectionReason`, and `createdBy`.
 
         **Free-text search (`q`)** performs a case-insensitive regex match against:
         - `firstName` — lead's first name
         - `telegramId` — Telegram user ID string
-        - `profession` — stated profession
         - `interest` — stated interest / desired course
         - `notes` — internal notes
         - `level` — self-reported proficiency level
@@ -5003,12 +5097,11 @@ paths:
         | Parameter | Type | Behaviour |
         |-----------|------|-----------|
         | `status` | string | Exact match (`new` / `contacted` / `interested` / `scheduled` / `converted` / `rejected`) |
-        | `source` | string | Exact match (`telegram` / `instagram` / `referral` / `offline` / `other`) |
+        | `source` | ObjectId | Exact match by LeadSource `_id` |
         | `paymentStatus` | string | Exact match (`unpaid` / `partial` / `paid`) |
         | `gender` | string | Exact match (`male` / `female`) |
-        | `group` | ObjectId | Exact match by group `_id` |
+        | `courseType` | ObjectId | Exact match by CourseType `_id` |
         | `level` | string | Partial, case-insensitive match |
-        | `profession` | string | Partial, case-insensitive match |
         | `age` | integer | Exact age match |
         | `minAge` | integer | Age ≥ value |
         | `maxAge` | integer | Age ≤ value |
@@ -5025,7 +5118,7 @@ paths:
           required: false
           description: |
             Free-text search term. Case-insensitive regex matched against firstName, telegramId,
-            profession, interest, notes, level, and numerically against phone and age.
+            interest, notes, level, and numerically against phone and age.
           schema:
             type: string
             example: "Matematik"
@@ -5039,10 +5132,10 @@ paths:
         - name: source
           in: query
           required: false
-          description: Filter by traffic source
+          description: Filter by LeadSource ObjectId
           schema:
             type: string
-            enum: [telegram, instagram, referral, offline, other]
+            example: "664f1a2b3c4d5e6f7a8b9c11"
         - name: paymentStatus
           in: query
           required: false
@@ -5057,13 +5150,13 @@ paths:
           schema:
             type: string
             enum: [male, female]
-        - name: group
+        - name: courseType
           in: query
           required: false
-          description: Filter by interested group ObjectId
+          description: Filter by CourseType ObjectId
           schema:
             type: string
-            example: "664f1a2b3c4d5e6f7a8b9d01"
+            example: "664f1a2b3c4d5e6f7a8b9c10"
         - name: level
           in: query
           required: false
@@ -5071,13 +5164,6 @@ paths:
           schema:
             type: string
             example: "A2"
-        - name: profession
-          in: query
-          required: false
-          description: Filter by profession (partial match)
-          schema:
-            type: string
-            example: "dasturchi"
         - name: age
           in: query
           required: false
@@ -5159,16 +5245,19 @@ paths:
                         phone: 998911234567
                         gender: "male"
                         age: 22
-                        profession: "Talaba"
                         interest: "Matematika"
-                        source: "instagram"
+                        source:
+                          _id: "664f1a2b3c4d5e6f7a8b9c11"
+                          name: "Instagram"
+                          slug: "instagram"
                         status: "new"
                         paymentStatus: "unpaid"
                         level: "A2"
-                        group:
-                          _id: "664f1a2b3c4d5e6f7a8b9d01"
+                        courseType:
+                          _id: "664f1a2b3c4d5e6f7a8b9c10"
                           name: "Matematika Olympiad"
-                          price: 400000
+                          type: "Math"
+                          direction: "Advanced"
                         createdBy:
                           _id: "664f1a2b3c4d5e6f7a8b9c0d"
                           firstName: "Alisher"
@@ -5213,7 +5302,7 @@ paths:
       tags: [Leads]
       summary: List leads
       description: |
-        Returns a paginated, filterable list of leads populated with `group` and `createdBy`.
+        Returns a paginated, filterable list of leads populated with `source`, `courseType`, `rejectionReason`, and `createdBy`.
 
         **Access:** Admin, Teacher.
 
@@ -5236,14 +5325,13 @@ paths:
             example: "new"
         - name: source
           in: query
-          description: Filter by acquisition source
+          description: Filter by LeadSource ObjectId
           schema:
             type: string
-            enum: [telegram, instagram, referral, offline, other]
-            example: "telegram"
-        - name: group
+            example: "664f1a2b3c4d5e6f7a8b9c11"
+        - name: courseType
           in: query
-          description: Filter by interested-in Group ObjectId
+          description: Filter by CourseType ObjectId
           schema:
             type: string
             example: "664f1a2b3c4d5e6f7a8b9c10"
@@ -5337,15 +5425,15 @@ paths:
                   firstName: "Ali"
                   phone: 998901234567
                   telegramId: "123456789"
-                  source: "telegram"
+                  source: "664f1a2b3c4d5e6f7a8b9c11"
                   interest: "English evening course"
-              withGroupInterest:
-                summary: Lead with a target group + scheduled call
+              withCourseTypeInterest:
+                summary: Lead with a target course type + scheduled call
                 value:
                   firstName: "Malika"
                   phone: 998977776655
-                  source: "instagram"
-                  group: "664f1a2b3c4d5e6f7a8b9c10"
+                  source: "664f1a2b3c4d5e6f7a8b9c11"
+                  courseType: "664f1a2b3c4d5e6f7a8b9c10"
                   level: "A1"
                   status: "scheduled"
                   scheduledAt: "2026-04-20T14:00:00.000Z"
@@ -5377,8 +5465,6 @@ paths:
                   value: { code: "missingField", message: "Ism kiritilishi shart" }
                 invalidStatus:
                   value: { code: "invalidLeadStatus", message: "Murojaat holati noto'g'ri" }
-                invalidSource:
-                  value: { code: "invalidField", message: "Manba noto'g'ri" }
                 invalidPaymentStatus:
                   value: { code: "invalidField", message: "To'lov holati noto'g'ri" }
                 invalidGender:
@@ -5428,7 +5514,7 @@ paths:
       tags: [Leads]
       summary: Get a lead by ID
       description: |
-        Returns a single lead populated with `group` (name, price, teacher) and `createdBy` (firstName, lastName).
+        Returns a single lead populated with `source`, `courseType`, `rejectionReason`, and `createdBy`.
 
         **Access:** Admin, Teacher.
       operationId: getLead
@@ -5488,7 +5574,7 @@ paths:
         **Typical flows:**
         - `{ "status": "contacted", "notes": "qo'ng'iroq qildim" }` — log a follow-up call.
         - `{ "status": "scheduled", "scheduledAt": "2026-04-20T14:00:00Z" }` — book a meeting.
-        - `{ "status": "rejected", "rejectionReason": "Narx qimmat" }` — close the lead.
+        - `{ "status": "rejected", "rejectionReason": "<ObjectId>" }` — close the lead.
         - `{ "status": "converted" }` — mark as won; then create the `Enrollment` via `POST /enrollments`.
       operationId: updateLead
       security:
@@ -5516,7 +5602,7 @@ paths:
                 summary: Close as rejected
                 value:
                   status: "rejected"
-                  rejectionReason: "Narx juda qimmat"
+                  rejectionReason: "664f1a2b3c4d5e6f7a8b9c12"
               convertLead:
                 summary: Flip to converted (then create Enrollment separately)
                 value:
@@ -7468,5 +7554,701 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
               example: { code: "salaryNotFound", message: "Oylik topilmadi" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ══════════════════════════════════════════
+  # LEAD SOURCES
+  # ══════════════════════════════════════════
+
+  /lead-sources:
+    get:
+      tags: [Lead Sources]
+      summary: List lead sources
+      description: Returns a paginated list of lead sources. Supports free-text search (`q`). **Admin only.**
+      operationId: getLeadSources
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/pageParam"
+        - $ref: "#/components/parameters/limitParam"
+        - name: q
+          in: query
+          description: Search by name or slug
+          schema:
+            type: string
+            example: "telegram"
+      responses:
+        "200":
+          description: Lead sources returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  leadSources:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LeadSource"
+                  total: { type: integer, example: 5 }
+                  page: { type: integer, example: 1 }
+                  limit: { type: integer, example: 20 }
+                  totalPages: { type: integer, example: 1 }
+                  hasNextPage: { type: boolean, example: false }
+                  hasPrevPage: { type: boolean, example: false }
+                  code: { type: string, example: leadSourcesFound }
+                  message: { type: string, example: "Manbalar ro'yxati olindi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    post:
+      tags: [Lead Sources]
+      summary: Create a lead source
+      description: Creates a new lead source. **Admin only.**
+      operationId: createLeadSource
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: "Telegram"
+                slug:
+                  type: string
+                  example: "telegram"
+      responses:
+        "201":
+          description: Lead source created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  leadSource:
+                    $ref: "#/components/schemas/LeadSource"
+                  code: { type: string, example: leadSourceCreated }
+                  message: { type: string, example: "Manba muvaffaqiyatli yaratildi" }
+        "400":
+          description: Missing name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "missingField", message: "Manba nomi kiritilishi shart" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /lead-sources/{id}:
+    get:
+      tags: [Lead Sources]
+      summary: Get a lead source by ID
+      operationId: getLeadSource
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c11"
+      responses:
+        "200":
+          description: Lead source found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  leadSource:
+                    $ref: "#/components/schemas/LeadSource"
+                  code: { type: string, example: leadSourcesFound }
+                  message: { type: string, example: "Manbalar ro'yxati olindi" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Lead source not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "leadSourceNotFound", message: "Manba topilmadi" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    put:
+      tags: [Lead Sources]
+      summary: Update a lead source
+      operationId: updateLeadSource
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c11"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: "Instagram"
+                slug:
+                  type: string
+                  example: "instagram"
+      responses:
+        "200":
+          description: Lead source updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  leadSource:
+                    $ref: "#/components/schemas/LeadSource"
+                  code: { type: string, example: leadSourceUpdated }
+                  message: { type: string, example: "Manba muvaffaqiyatli yangilandi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Lead source not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "leadSourceNotFound", message: "Manba topilmadi" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    delete:
+      tags: [Lead Sources]
+      summary: Delete a lead source
+      operationId: deleteLeadSource
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c11"
+      responses:
+        "200":
+          description: Lead source deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string, example: leadSourceDeleted }
+                  message: { type: string, example: "Manba muvaffaqiyatli o'chirildi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Lead source not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "leadSourceNotFound", message: "Manba topilmadi" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ══════════════════════════════════════════
+  # COURSE TYPES
+  # ══════════════════════════════════════════
+
+  /course-types:
+    get:
+      tags: [Course Types]
+      summary: List course types
+      description: Returns a paginated list of course types. Supports free-text search (`q`) and optional `type`/`direction` filters. **Admin only.**
+      operationId: getCourseTypes
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/pageParam"
+        - $ref: "#/components/parameters/limitParam"
+        - name: q
+          in: query
+          description: Search by name, type, or direction
+          schema:
+            type: string
+            example: "IELTS"
+        - name: type
+          in: query
+          description: Filter by course subject area (partial match)
+          schema:
+            type: string
+            example: "English"
+        - name: direction
+          in: query
+          description: Filter by direction/level (partial match)
+          schema:
+            type: string
+            example: "Advanced"
+      responses:
+        "200":
+          description: Course types returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  courseTypes:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CourseType"
+                  total: { type: integer, example: 8 }
+                  page: { type: integer, example: 1 }
+                  limit: { type: integer, example: 20 }
+                  totalPages: { type: integer, example: 1 }
+                  hasNextPage: { type: boolean, example: false }
+                  hasPrevPage: { type: boolean, example: false }
+                  code: { type: string, example: courseTypesFound }
+                  message: { type: string, example: "Kurs turlari ro'yxati olindi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    post:
+      tags: [Course Types]
+      summary: Create a course type
+      description: Creates a new course type. **Admin only.**
+      operationId: createCourseType
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: "IELTS Tayyorlov"
+                type:
+                  type: string
+                  example: "English"
+                direction:
+                  type: string
+                  example: "Advanced"
+      responses:
+        "201":
+          description: Course type created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  courseType:
+                    $ref: "#/components/schemas/CourseType"
+                  code: { type: string, example: courseTypeCreated }
+                  message: { type: string, example: "Kurs turi muvaffaqiyatli yaratildi" }
+        "400":
+          description: Missing name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "missingField", message: "Kurs turi nomi kiritilishi shart" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /course-types/{id}:
+    get:
+      tags: [Course Types]
+      summary: Get a course type by ID
+      operationId: getCourseType
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c10"
+      responses:
+        "200":
+          description: Course type found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  courseType:
+                    $ref: "#/components/schemas/CourseType"
+                  code: { type: string, example: courseTypesFound }
+                  message: { type: string, example: "Kurs turlari ro'yxati olindi" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Course type not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "courseTypeNotFound", message: "Kurs turi topilmadi" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    put:
+      tags: [Course Types]
+      summary: Update a course type
+      operationId: updateCourseType
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c10"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: "General English"
+                type:
+                  type: string
+                  example: "English"
+                direction:
+                  type: string
+                  example: "Beginner"
+      responses:
+        "200":
+          description: Course type updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  courseType:
+                    $ref: "#/components/schemas/CourseType"
+                  code: { type: string, example: courseTypeUpdated }
+                  message: { type: string, example: "Kurs turi muvaffaqiyatli yangilandi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Course type not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "courseTypeNotFound", message: "Kurs turi topilmadi" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    delete:
+      tags: [Course Types]
+      summary: Delete a course type
+      operationId: deleteCourseType
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c10"
+      responses:
+        "200":
+          description: Course type deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string, example: courseTypeDeleted }
+                  message: { type: string, example: "Kurs turi muvaffaqiyatli o'chirildi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Course type not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "courseTypeNotFound", message: "Kurs turi topilmadi" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ══════════════════════════════════════════
+  # REJECTION REASONS
+  # ══════════════════════════════════════════
+
+  /rejection-reasons:
+    get:
+      tags: [Rejection Reasons]
+      summary: List rejection reasons
+      description: Returns a paginated list of rejection reasons. Supports free-text search (`q`). **Admin only.**
+      operationId: getRejectionReasons
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/pageParam"
+        - $ref: "#/components/parameters/limitParam"
+        - name: q
+          in: query
+          description: Search by title or description
+          schema:
+            type: string
+            example: "narx"
+      responses:
+        "200":
+          description: Rejection reasons returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rejectionReasons:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RejectionReason"
+                  total: { type: integer, example: 6 }
+                  page: { type: integer, example: 1 }
+                  limit: { type: integer, example: 20 }
+                  totalPages: { type: integer, example: 1 }
+                  hasNextPage: { type: boolean, example: false }
+                  hasPrevPage: { type: boolean, example: false }
+                  code: { type: string, example: rejectionReasonsFound }
+                  message: { type: string, example: "Rad etish sabablari ro'yxati olindi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    post:
+      tags: [Rejection Reasons]
+      summary: Create a rejection reason
+      description: Creates a new rejection reason. **Admin only.**
+      operationId: createRejectionReason
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  example: "Narx juda qimmat"
+                description:
+                  type: string
+                  example: "Lead said the price is too high compared to other centers"
+      responses:
+        "201":
+          description: Rejection reason created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rejectionReason:
+                    $ref: "#/components/schemas/RejectionReason"
+                  code: { type: string, example: rejectionReasonCreated }
+                  message: { type: string, example: "Rad etish sababi muvaffaqiyatli yaratildi" }
+        "400":
+          description: Missing title
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "missingField", message: "Rad etish sababi kiritilishi shart" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /rejection-reasons/{id}:
+    get:
+      tags: [Rejection Reasons]
+      summary: Get a rejection reason by ID
+      operationId: getRejectionReason
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c12"
+      responses:
+        "200":
+          description: Rejection reason found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rejectionReason:
+                    $ref: "#/components/schemas/RejectionReason"
+                  code: { type: string, example: rejectionReasonsFound }
+                  message: { type: string, example: "Rad etish sabablari ro'yxati olindi" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Rejection reason not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "rejectionReasonNotFound", message: "Rad etish sababi topilmadi" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    put:
+      tags: [Rejection Reasons]
+      summary: Update a rejection reason
+      operationId: updateRejectionReason
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c12"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  example: "Boshqa markazni tanladi"
+                description:
+                  type: string
+                  example: "Went to a competitor"
+      responses:
+        "200":
+          description: Rejection reason updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rejectionReason:
+                    $ref: "#/components/schemas/RejectionReason"
+                  code: { type: string, example: rejectionReasonUpdated }
+                  message: { type: string, example: "Rad etish sababi muvaffaqiyatli yangilandi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Rejection reason not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "rejectionReasonNotFound", message: "Rad etish sababi topilmadi" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    delete:
+      tags: [Rejection Reasons]
+      summary: Delete a rejection reason
+      operationId: deleteRejectionReason
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "664f1a2b3c4d5e6f7a8b9c12"
+      responses:
+        "200":
+          description: Rejection reason deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string, example: rejectionReasonDeleted }
+                  message: { type: string, example: "Rad etish sababi muvaffaqiyatli o'chirildi" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Rejection reason not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { code: "rejectionReasonNotFound", message: "Rad etish sababi topilmadi" }
         "429":
           $ref: "#/components/responses/TooManyRequests"

@@ -10,7 +10,6 @@ const Lead = require("../models/Lead");
 const recordService = require("../services/recordService");
 
 const ALLOWED_STATUSES = ["new", "contacted", "interested", "scheduled", "converted", "rejected"];
-const ALLOWED_SOURCES = ["telegram", "instagram", "referral", "offline", "other"];
 const ALLOWED_PAYMENT_STATUSES = ["unpaid", "partial", "paid"];
 const ALLOWED_GENDERS = ["male", "female"];
 
@@ -20,16 +19,22 @@ const UPDATABLE_FIELDS = [
   "telegramId",
   "gender",
   "age",
-  "profession",
   "source",
   "interest",
-  "group",
+  "courseType",
   "level",
   "status",
   "rejectionReason",
   "paymentStatus",
   "scheduledAt",
   "notes",
+];
+
+const POPULATE_FIELDS = [
+  { path: "source", select: "name slug" },
+  { path: "courseType", select: "name type direction" },
+  { path: "rejectionReason", select: "title" },
+  { path: "createdBy", select: "firstName lastName" },
 ];
 
 const generateUniqueLink = async () => {
@@ -49,7 +54,7 @@ const getLeads = async (req, res, next) => {
 
     if (req.query.status) filter.status = req.query.status;
     if (req.query.source) filter.source = req.query.source;
-    if (req.query.group) filter.group = req.query.group;
+    if (req.query.courseType) filter.courseType = req.query.courseType;
     if (req.query.paymentStatus) filter.paymentStatus = req.query.paymentStatus;
 
     if (req.query.search) {
@@ -65,8 +70,7 @@ const getLeads = async (req, res, next) => {
 
     const [leads, total] = await Promise.all([
       Lead.find(filter)
-        .populate({ path: "group", select: "name price" })
-        .populate({ path: "createdBy", select: "firstName lastName" })
+        .populate(POPULATE_FIELDS)
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 }),
@@ -87,9 +91,7 @@ const getLeads = async (req, res, next) => {
 // GET /leads/:id
 const getLead = async (req, res, next) => {
   try {
-    const lead = await Lead.findById(req.params.id)
-      .populate({ path: "group", select: "name price teacher" })
-      .populate({ path: "createdBy", select: "firstName lastName" });
+    const lead = await Lead.findById(req.params.id).populate(POPULATE_FIELDS);
 
     if (!lead) {
       return res.status(404).json({ code: "leadNotFound", message: texts.leadNotFound });
@@ -114,9 +116,6 @@ const createLead = async (req, res, next) => {
   if (payload.status && !ALLOWED_STATUSES.includes(payload.status)) {
     return res.status(400).json({ code: "invalidLeadStatus", message: texts.invalidLeadStatus });
   }
-  if (payload.source && !ALLOWED_SOURCES.includes(payload.source)) {
-    return res.status(400).json({ code: "invalidField", message: "Manba noto'g'ri" });
-  }
   if (payload.paymentStatus && !ALLOWED_PAYMENT_STATUSES.includes(payload.paymentStatus)) {
     return res.status(400).json({ code: "invalidField", message: "To'lov holati noto'g'ri" });
   }
@@ -136,10 +135,7 @@ const createLead = async (req, res, next) => {
       createdBy: req.user?._id,
     });
 
-    const populated = await lead.populate([
-      { path: "group", select: "name price" },
-      { path: "createdBy", select: "firstName lastName" },
-    ]);
+    const populated = await lead.populate(POPULATE_FIELDS);
 
     await recordService.createRecord({
       eventType: "LEAD_CREATED",
@@ -149,7 +145,7 @@ const createLead = async (req, res, next) => {
       actor: recordService.actorFromReq(req),
       refs: {
         leadId: lead._id,
-        groupId: lead.group || undefined,
+        courseTypeId: lead.courseType || undefined,
       },
     });
 
@@ -167,9 +163,6 @@ const updateLead = async (req, res, next) => {
     if (updates.status && !ALLOWED_STATUSES.includes(updates.status)) {
       return res.status(400).json({ code: "invalidLeadStatus", message: texts.invalidLeadStatus });
     }
-    if (updates.source && !ALLOWED_SOURCES.includes(updates.source)) {
-      return res.status(400).json({ code: "invalidField", message: "Manba noto'g'ri" });
-    }
     if (updates.paymentStatus && !ALLOWED_PAYMENT_STATUSES.includes(updates.paymentStatus)) {
       return res.status(400).json({ code: "invalidField", message: "To'lov holati noto'g'ri" });
     }
@@ -186,8 +179,7 @@ const updateLead = async (req, res, next) => {
     }
 
     const lead = await Lead.findByIdAndUpdate(req.params.id, updates, { new: true })
-      .populate({ path: "group", select: "name price" })
-      .populate({ path: "createdBy", select: "firstName lastName" });
+      .populate(POPULATE_FIELDS);
 
     if (!lead) {
       return res.status(404).json({ code: "leadNotFound", message: texts.leadNotFound });
@@ -207,7 +199,10 @@ const updateLead = async (req, res, next) => {
         entityId: lead._id,
         entity: lead,
         actor,
-        refs: { leadId: lead._id, groupId: lead.group?._id || lead.group || undefined },
+        refs: {
+          leadId: lead._id,
+          courseTypeId: lead.courseType?._id || lead.courseType || undefined,
+        },
         changes: diff,
       });
     }
@@ -222,7 +217,10 @@ const updateLead = async (req, res, next) => {
         entityId: lead._id,
         entity: lead,
         actor,
-        refs: { leadId: lead._id, groupId: lead.group?._id || lead.group || undefined },
+        refs: {
+          leadId: lead._id,
+          courseTypeId: lead.courseType?._id || lead.courseType || undefined,
+        },
         metadata: { from: existing.status, to: lead.status },
       });
     }
@@ -247,7 +245,10 @@ const deleteLead = async (req, res, next) => {
       entityId: lead._id,
       entity: lead,
       actor: recordService.actorFromReq(req),
-      refs: { leadId: lead._id, groupId: lead.group || undefined },
+      refs: {
+        leadId: lead._id,
+        courseTypeId: lead.courseType || undefined,
+      },
     });
 
     res.json({ code: "leadDeleted", message: texts.leadDeleted });
@@ -279,7 +280,10 @@ const trackLeadClick = async (req, res, next) => {
         entityId: lead._id,
         entity: lead,
         actor: recordService.systemActor("Tizim"),
-        refs: { leadId: lead._id, groupId: lead.group || undefined },
+        refs: {
+          leadId: lead._id,
+          courseTypeId: lead.courseType || undefined,
+        },
       });
     }
 
@@ -290,9 +294,6 @@ const trackLeadClick = async (req, res, next) => {
 };
 
 // GET /leads/search
-// Searches across firstName, telegramId, profession, interest, notes, level (text fields)
-// and phone, age (numeric). Supports field filters: status, source, paymentStatus, gender,
-// group, level, minAge, maxAge.
 const searchLeads = async (req, res, next) => {
   try {
     const { page, limit, skip } = getPagination(req.query);
@@ -302,9 +303,8 @@ const searchLeads = async (req, res, next) => {
     if (req.query.source) filter.source = req.query.source;
     if (req.query.paymentStatus) filter.paymentStatus = req.query.paymentStatus;
     if (req.query.gender) filter.gender = String(req.query.gender).toLowerCase();
-    if (req.query.group) filter.group = req.query.group;
+    if (req.query.courseType) filter.courseType = req.query.courseType;
     if (req.query.level) filter.level = buildSearchRegex(req.query.level);
-    if (req.query.profession) filter.profession = buildSearchRegex(req.query.profession);
 
     if (req.query.age !== undefined && req.query.age !== "") {
       const ageNum = Number(req.query.age);
@@ -324,7 +324,6 @@ const searchLeads = async (req, res, next) => {
       const orClauses = [
         { firstName: regex },
         { telegramId: regex },
-        { profession: regex },
         { interest: regex },
         { notes: regex },
         { level: regex },
@@ -339,8 +338,7 @@ const searchLeads = async (req, res, next) => {
 
     const [leads, total] = await Promise.all([
       Lead.find(filter)
-        .populate({ path: "group", select: "name price" })
-        .populate({ path: "createdBy", select: "firstName lastName" })
+        .populate(POPULATE_FIELDS)
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 }),

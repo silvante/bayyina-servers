@@ -7,18 +7,17 @@ const Lead = new mongoose.Schema(
     telegramId: { type: String, unique: true, sparse: true },
     gender: { type: String, enum: ["male", "female"] },
     age: { type: Number, min: 1, max: 120 },
-    profession: { type: String }, // unnecessary
     source: {
-      type: String,
-      enum: ["telegram", "instagram", "referral", "offline", "other"],
-      default: "other",
-    }, // should be in separate model, which has its own crud
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "LeadSource",
+      sparse: true,
+    },
     interest: { type: String },
     uniqueLink: { type: String, unique: true, index: true },
     linkClickedAt: { type: Date, default: null },
-    group: { // should be named group type and direction, and should be in separate model, which has its own crud
+    courseType: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Group",
+      ref: "CourseType",
     },
     level: { type: String },
     status: {
@@ -26,7 +25,10 @@ const Lead = new mongoose.Schema(
       enum: ["new", "contacted", "interested", "scheduled", "converted", "rejected"],
       default: "new",
     },
-    rejectionReason: { type: String }, // should be in separate model, which has its own crud
+    rejectionReason: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "RejectionReason",
+    },
     paymentStatus: {
       type: String,
       enum: ["unpaid", "partial", "paid"],
@@ -44,6 +46,6 @@ const Lead = new mongoose.Schema(
 );
 
 Lead.index({ status: 1, createdAt: -1 });
-Lead.index({ source: 1 });
+Lead.index({ courseType: 1 });
 
 module.exports = mongoose.model("Lead", Lead);

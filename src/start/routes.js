@@ -12,6 +12,9 @@ const notificationsRoute = require("../routes/notifications");
 const statisticsRoute = require("../routes/statistics");
 const recordsRoute = require("../routes/records");
 const salariesRoute = require("../routes/salaries");
+const leadSourcesRoute = require("../routes/leadSources");
+const courseTypesRoute = require("../routes/courseTypes");
+const rejectionReasonsRoute = require("../routes/rejectionReasons");
 
 // Error handler
 const errorHandler = require("../middlewares/errorHandler");
@@ -30,5 +33,8 @@ app.use("/api/notifications", notificationsRoute);
 app.use("/api/statistics", statisticsRoute);
 app.use("/api/records", recordsRoute);
 app.use("/api/salaries", salariesRoute);
+app.use("/api/lead-sources", leadSourcesRoute);
+app.use("/api/course-types", courseTypesRoute);
+app.use("/api/rejection-reasons", rejectionReasonsRoute);
 
 app.use(errorHandler);
