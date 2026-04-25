@@ -4,6 +4,7 @@ const {
   getPagination,
   buildPaginationMeta,
   isValidPhone,
+  buildSearchRegex,
 } = require("../utils/helpers");
 const User = require("../models/User");
 const Group = require("../models/Group");
@@ -428,6 +429,128 @@ const getStudents = async (req, res, next) => {
   }
 };
 
+// Builds a $or clause for searching users by free-text q across multiple fields.
+// Searches firstName, lastName, source, gender (text fields) and phone, age (numeric).
+const buildUserSearchOr = (q) => {
+  const regex = buildSearchRegex(q);
+  if (!regex) return null;
+  const orClauses = [
+    { firstName: regex },
+    { lastName: regex },
+    { source: regex },
+    { gender: regex },
+  ];
+  const numeric = Number(String(q).trim());
+  if (!Number.isNaN(numeric)) {
+    orClauses.push({ phone: numeric });
+    orClauses.push({ age: numeric });
+  }
+  return orClauses;
+};
+
+// Applies field-level filters from query to a user filter object.
+const applyUserFieldFilters = (filter, query) => {
+  if (query.firstName) filter.firstName = buildSearchRegex(query.firstName);
+  if (query.lastName) filter.lastName = buildSearchRegex(query.lastName);
+  if (query.gender) filter.gender = String(query.gender).toLowerCase();
+  if (query.source) filter.source = buildSearchRegex(query.source);
+  if (query.phone !== undefined && query.phone !== "") {
+    const phoneNum = Number(query.phone);
+    if (!Number.isNaN(phoneNum)) filter.phone = phoneNum;
+  }
+  if (query.age !== undefined && query.age !== "") {
+    const ageNum = Number(query.age);
+    if (!Number.isNaN(ageNum)) filter.age = ageNum;
+  }
+  if (query.minAge !== undefined || query.maxAge !== undefined) {
+    const ageRange = {};
+    const min = Number(query.minAge);
+    const max = Number(query.maxAge);
+    if (!Number.isNaN(min)) ageRange.$gte = min;
+    if (!Number.isNaN(max)) ageRange.$lte = max;
+    if (Object.keys(ageRange).length) filter.age = ageRange;
+  }
+};
+
+// GET /users/students/search — admin only
+const searchStudents = async (req, res, next) => {
+  try {
+    const { page, limit, skip } = getPagination(req.query);
+    const filter = { role: "student" };
+
+    applyUserFieldFilters(filter, req.query);
+
+    const orClauses = buildUserSearchOr(req.query.q);
+    if (orClauses) filter.$or = orClauses;
+
+    const [students, total] = await Promise.all([
+      User.find(filter)
+        .select("-password")
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 }),
+      User.countDocuments(filter),
+    ]);
+
+    const studentIds = students.map((s) => s._id);
+    const enrollments = await Enrollment.find({ student: { $in: studentIds } })
+      .select("-student -__v")
+      .populate("group", "name description price schedule room");
+
+    const enrollmentsByStudent = {};
+    for (const enrollment of enrollments) {
+      const sid = String(enrollment.student);
+      if (!enrollmentsByStudent[sid]) enrollmentsByStudent[sid] = [];
+      enrollmentsByStudent[sid].push(enrollment);
+    }
+
+    const users = students.map((student) => ({
+      ...student.toObject(),
+      enrollments: enrollmentsByStudent[String(student._id)] || [],
+    }));
+
+    res.json({
+      users,
+      ...buildPaginationMeta(total, page, limit),
+      code: "usersFound",
+      message: texts.usersFound,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /users/teachers/search — admin only
+const searchTeachers = async (req, res, next) => {
+  try {
+    const { page, limit, skip } = getPagination(req.query);
+    const filter = { role: "teacher" };
+
+    applyUserFieldFilters(filter, req.query);
+
+    const orClauses = buildUserSearchOr(req.query.q);
+    if (orClauses) filter.$or = orClauses;
+
+    const [users, total] = await Promise.all([
+      User.find(filter)
+        .select("-password")
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 }),
+      User.countDocuments(filter),
+    ]);
+
+    res.json({
+      users,
+      ...buildPaginationMeta(total, page, limit),
+      code: "usersFound",
+      message: texts.usersFound,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getUsers,
   getUser,
@@ -436,4 +559,6 @@ module.exports = {
   deleteUser,
   getTeachers,
   getStudents,
+  searchStudents,
+  searchTeachers,
 };

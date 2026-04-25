@@ -8,6 +8,7 @@ const {
   updateLead,
   deleteLead,
   trackLeadClick,
+  searchLeads,
 } = require("../controllers/leads.controller");
 const { auth, roleCheck } = require("../middlewares/auth");
 const validateId = require("../middlewares/validateId");
@@ -18,6 +19,12 @@ const validateId = require("../middlewares/validateId");
  * Declared before /:id so it is not matched by the ObjectId validator.
  */
 router.get("/track/:uniqueLink", trackLeadClick);
+
+/**
+ * GET /leads/search
+ * Access: admin, teacher
+ */
+router.get("/search", auth, roleCheck(["admin", "teacher"]), searchLeads);
 
 /**
  * GET /leads

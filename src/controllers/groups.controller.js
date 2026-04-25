@@ -1,7 +1,8 @@
 const texts = require("../data/texts");
-const { pickAllowedFields, getPagination, buildPaginationMeta } = require("../utils/helpers");
+const { pickAllowedFields, getPagination, buildPaginationMeta, buildSearchRegex } = require("../utils/helpers");
 const Group = require("../models/Group");
 const Enrollment = require("../models/Enrollment");
+const User = require("../models/User");
 const recordService = require("../services/recordService");
 
 const GROUP_UPDATABLE_FIELDS = ["name", "description", "price", "teacher", "schedule", "room"];
@@ -188,4 +189,81 @@ const deleteGroup = async (req, res, next) => {
   }
 };
 
-module.exports = { getGroups, getGroup, createGroup, updateGroup, deleteGroup };
+// GET /groups/search
+// Searches across name, description, room, schedule.time (text fields) and price (numeric).
+// Free-text q also matches teacher first/last name. Filters: teacher, day, minPrice, maxPrice.
+const searchGroups = async (req, res, next) => {
+  try {
+    const { page, limit, skip } = getPagination(req.query);
+    const filter = {};
+
+    if (req.user.role === "teacher") {
+      filter.teacher = req.user._id;
+    } else if (req.query.teacher) {
+      filter.teacher = req.query.teacher;
+    }
+
+    if (req.query.room) filter.room = buildSearchRegex(req.query.room);
+    if (req.query.day) filter["schedule.days"] = req.query.day;
+
+    if (req.query.price !== undefined && req.query.price !== "") {
+      const priceNum = Number(req.query.price);
+      if (!Number.isNaN(priceNum)) filter.price = priceNum;
+    }
+    if (req.query.minPrice !== undefined || req.query.maxPrice !== undefined) {
+      const priceRange = {};
+      const min = Number(req.query.minPrice);
+      const max = Number(req.query.maxPrice);
+      if (!Number.isNaN(min)) priceRange.$gte = min;
+      if (!Number.isNaN(max)) priceRange.$lte = max;
+      if (Object.keys(priceRange).length) filter.price = priceRange;
+    }
+
+    const regex = buildSearchRegex(req.query.q);
+    if (regex) {
+      const orClauses = [
+        { name: regex },
+        { description: regex },
+        { room: regex },
+        { "schedule.time": regex },
+      ];
+      const numeric = Number(String(req.query.q).trim());
+      if (!Number.isNaN(numeric)) {
+        orClauses.push({ price: numeric });
+      }
+
+      // Match by teacher name (admin only — teachers are already scoped to themselves).
+      if (req.user.role !== "teacher") {
+        const teachers = await User.find({
+          role: "teacher",
+          $or: [{ firstName: regex }, { lastName: regex }],
+        }).select("_id");
+        if (teachers.length) {
+          orClauses.push({ teacher: { $in: teachers.map((t) => t._id) } });
+        }
+      }
+
+      filter.$or = orClauses;
+    }
+
+    const [groups, total] = await Promise.all([
+      Group.find(filter)
+        .populate({ path: "teacher", select: "firstName lastName phone" })
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 }),
+      Group.countDocuments(filter),
+    ]);
+
+    res.json({
+      groups,
+      ...buildPaginationMeta(total, page, limit),
+      code: "groupsFound",
+      message: texts.groupsFound,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getGroups, getGroup, createGroup, updateGroup, deleteGroup, searchGroups };

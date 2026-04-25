@@ -38,6 +38,16 @@ const isValidPhone = (phone) => {
   return !isNaN(num) && String(num).length === 12;
 };
 
+const escapeRegex = (value) =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const buildSearchRegex = (term) => {
+  if (term === undefined || term === null) return null;
+  const trimmed = String(term).trim();
+  if (!trimmed) return null;
+  return new RegExp(escapeRegex(trimmed), "i");
+};
+
 const WEEKDAYS = [
   "Sunday",
   "Monday",
@@ -86,6 +96,8 @@ module.exports = {
   getPagination,
   buildPaginationMeta,
   isValidPhone,
+  escapeRegex,
+  buildSearchRegex,
   normaliseDate,
   getWeekdayName,
   expandScheduleDates,

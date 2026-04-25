@@ -1,9 +1,15 @@
 const express = require("express");
 const router = express.Router();
 
-const { getGroups, getGroup, createGroup, updateGroup, deleteGroup } = require("../controllers/groups.controller");
+const { getGroups, getGroup, createGroup, updateGroup, deleteGroup, searchGroups } = require("../controllers/groups.controller");
 const { auth, roleCheck } = require("../middlewares/auth");
 const validateId = require("../middlewares/validateId");
+
+/**
+ * GET /groups/search
+ * Access: admin, teacher (own scope)
+ */
+router.get("/search", auth, roleCheck(["admin", "teacher"]), searchGroups);
 
 /**
  * GET /groups

@@ -1,9 +1,15 @@
 const express = require("express");
 const router = express.Router();
 
-const { getPayments, getPayment, createPayment, updatePayment } = require("../controllers/payments.controller");
+const { getPayments, getPayment, createPayment, updatePayment, searchPayments } = require("../controllers/payments.controller");
 const { auth, roleCheck } = require("../middlewares/auth");
 const validateId = require("../middlewares/validateId");
+
+/**
+ * GET /payments/search
+ * Access: admin, teacher, student (scoped)
+ */
+router.get("/search", auth, searchPayments);
 
 /**
  * GET /payments

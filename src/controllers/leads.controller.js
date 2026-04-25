@@ -4,6 +4,7 @@ const {
   getPagination,
   buildPaginationMeta,
   pickAllowedFields,
+  buildSearchRegex,
 } = require("../utils/helpers");
 const Lead = require("../models/Lead");
 const recordService = require("../services/recordService");
@@ -288,6 +289,75 @@ const trackLeadClick = async (req, res, next) => {
   }
 };
 
+// GET /leads/search
+// Searches across firstName, telegramId, profession, interest, notes, level (text fields)
+// and phone, age (numeric). Supports field filters: status, source, paymentStatus, gender,
+// group, level, minAge, maxAge.
+const searchLeads = async (req, res, next) => {
+  try {
+    const { page, limit, skip } = getPagination(req.query);
+    const filter = {};
+
+    if (req.query.status) filter.status = req.query.status;
+    if (req.query.source) filter.source = req.query.source;
+    if (req.query.paymentStatus) filter.paymentStatus = req.query.paymentStatus;
+    if (req.query.gender) filter.gender = String(req.query.gender).toLowerCase();
+    if (req.query.group) filter.group = req.query.group;
+    if (req.query.level) filter.level = buildSearchRegex(req.query.level);
+    if (req.query.profession) filter.profession = buildSearchRegex(req.query.profession);
+
+    if (req.query.age !== undefined && req.query.age !== "") {
+      const ageNum = Number(req.query.age);
+      if (!Number.isNaN(ageNum)) filter.age = ageNum;
+    }
+    if (req.query.minAge !== undefined || req.query.maxAge !== undefined) {
+      const ageRange = {};
+      const min = Number(req.query.minAge);
+      const max = Number(req.query.maxAge);
+      if (!Number.isNaN(min)) ageRange.$gte = min;
+      if (!Number.isNaN(max)) ageRange.$lte = max;
+      if (Object.keys(ageRange).length) filter.age = ageRange;
+    }
+
+    const regex = buildSearchRegex(req.query.q);
+    if (regex) {
+      const orClauses = [
+        { firstName: regex },
+        { telegramId: regex },
+        { profession: regex },
+        { interest: regex },
+        { notes: regex },
+        { level: regex },
+      ];
+      const numeric = Number(String(req.query.q).trim());
+      if (!Number.isNaN(numeric)) {
+        orClauses.push({ phone: numeric });
+        orClauses.push({ age: numeric });
+      }
+      filter.$or = orClauses;
+    }
+
+    const [leads, total] = await Promise.all([
+      Lead.find(filter)
+        .populate({ path: "group", select: "name price" })
+        .populate({ path: "createdBy", select: "firstName lastName" })
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 }),
+      Lead.countDocuments(filter),
+    ]);
+
+    res.json({
+      leads,
+      ...buildPaginationMeta(total, page, limit),
+      code: "leadsFound",
+      message: texts.leadsFound,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getLeads,
   getLead,
@@ -295,4 +365,5 @@ module.exports = {
   updateLead,
   deleteLead,
   trackLeadClick,
+  searchLeads,
 };

@@ -1,9 +1,21 @@
 const express = require("express");
 const router = express.Router();
 
-const { getUsers, getUser, createUser, updateUser, deleteUser, getTeachers, getStudents } = require("../controllers/users.controller");
+const { getUsers, getUser, createUser, updateUser, deleteUser, getTeachers, getStudents, searchStudents, searchTeachers } = require("../controllers/users.controller");
 const { auth, roleCheck } = require("../middlewares/auth");
 const validateId = require("../middlewares/validateId");
+
+/**
+ * GET /users/teachers/search
+ * Access: admin only
+ */
+router.get("/teachers/search", auth, roleCheck(["admin"]), searchTeachers);
+
+/**
+ * GET /users/students/search
+ * Access: admin only
+ */
+router.get("/students/search", auth, roleCheck(["admin"]), searchStudents);
 
 /**
  * GET /users/teachers

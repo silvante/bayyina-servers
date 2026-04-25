@@ -1,5 +1,5 @@
 const texts = require("../data/texts");
-const { pickAllowedFields, getPagination, buildPaginationMeta } = require("../utils/helpers");
+const { pickAllowedFields, getPagination, buildPaginationMeta, buildSearchRegex } = require("../utils/helpers");
 const Payment = require("../models/Payment");
 const Enrollment = require("../models/Enrollment");
 const User = require("../models/User");
@@ -308,4 +308,107 @@ const updatePayment = async (req, res, next) => {
   }
 };
 
-module.exports = { getPayments, getPayment, createPayment, updatePayment };
+// GET /payments/search
+// Searches across note (text), amount and student phone (numeric). Free-text q
+// also matches student first/last name. Filters: status, student, enrollment,
+// minAmount, maxAmount, month (YYYY-MM), from, to (paidAt range).
+const searchPayments = async (req, res, next) => {
+  try {
+    const { page, limit, skip } = getPagination(req.query);
+    const filter = {};
+
+    if (req.user.role === "student") {
+      filter.student = req.user._id;
+    } else if (req.query.student) {
+      filter.student = req.query.student;
+    }
+
+    if (req.query.status) filter.status = req.query.status;
+    if (req.query.enrollment) filter.enrollment = req.query.enrollment;
+
+    if (req.query.amount !== undefined && req.query.amount !== "") {
+      const amountNum = Number(req.query.amount);
+      if (!Number.isNaN(amountNum)) filter.amount = amountNum;
+    }
+    if (req.query.minAmount !== undefined || req.query.maxAmount !== undefined) {
+      const amountRange = {};
+      const min = Number(req.query.minAmount);
+      const max = Number(req.query.maxAmount);
+      if (!Number.isNaN(min)) amountRange.$gte = min;
+      if (!Number.isNaN(max)) amountRange.$lte = max;
+      if (Object.keys(amountRange).length) filter.amount = amountRange;
+    }
+
+    if (req.query.month) {
+      const match = /^(\d{4})-(\d{1,2})$/.exec(String(req.query.month).trim());
+      if (match) {
+        const year = Number(match[1]);
+        const monthIdx = Number(match[2]) - 1;
+        const start = new Date(year, monthIdx, 1);
+        const end = new Date(year, monthIdx + 1, 0, 23, 59, 59, 999);
+        filter.month = { $gte: start, $lte: end };
+      }
+    }
+
+    if (req.query.from || req.query.to) {
+      const range = {};
+      if (req.query.from) {
+        const fromDate = new Date(req.query.from);
+        if (!Number.isNaN(fromDate.getTime())) range.$gte = fromDate;
+      }
+      if (req.query.to) {
+        const toDate = new Date(req.query.to);
+        if (!Number.isNaN(toDate.getTime())) range.$lte = toDate;
+      }
+      if (Object.keys(range).length) filter.paidAt = range;
+    }
+
+    const regex = buildSearchRegex(req.query.q);
+    if (regex) {
+      const orClauses = [{ note: regex }];
+      const numeric = Number(String(req.query.q).trim());
+      if (!Number.isNaN(numeric)) {
+        orClauses.push({ amount: numeric });
+      }
+
+      // Resolve student references by name/phone — but never override a student-scope filter.
+      if (req.user.role !== "student") {
+        const studentMatch = {
+          role: "student",
+          $or: [{ firstName: regex }, { lastName: regex }],
+        };
+        if (!Number.isNaN(numeric)) {
+          studentMatch.$or.push({ phone: numeric });
+        }
+        const students = await User.find(studentMatch).select("_id");
+        if (students.length) {
+          orClauses.push({ student: { $in: students.map((s) => s._id) } });
+        }
+      }
+
+      filter.$or = orClauses;
+    }
+
+    const [payments, total] = await Promise.all([
+      Payment.find(filter)
+        .populate({ path: "student", select: "firstName lastName phone" })
+        .populate({ path: "enrollment", select: "group status" })
+        .populate({ path: "createdBy", select: "firstName lastName" })
+        .skip(skip)
+        .limit(limit)
+        .sort({ month: -1 }),
+      Payment.countDocuments(filter),
+    ]);
+
+    res.json({
+      payments,
+      ...buildPaginationMeta(total, page, limit),
+      code: "paymentsFound",
+      message: texts.paymentsFound,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getPayments, getPayment, createPayment, updatePayment, searchPayments };
