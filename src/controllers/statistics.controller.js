@@ -91,7 +91,7 @@ const getLeadStats = async (req, res, next) => {
     const baseMatch = Object.keys(dateFilter).length ? dateFilter : {};
     const trendStart = last6MonthsStart();
 
-    const [byStatus, bySource, byGender, monthlyTrend] = await Promise.all([
+    const [byStatus, bySource, byGender, byRejectionReason, monthlyTrend] = await Promise.all([
       Lead.aggregate([
         { $match: baseMatch },
         { $group: { _id: "$status", count: { $sum: 1 } } },
@@ -102,7 +102,22 @@ const getLeadStats = async (req, res, next) => {
       Lead.aggregate([
         { $match: baseMatch },
         { $group: { _id: "$source", count: { $sum: 1 } } },
-        { $project: { _id: 0, source: "$_id", count: 1 } },
+        {
+          $lookup: {
+            from: "leadsources",
+            localField: "_id",
+            foreignField: "_id",
+            as: "sourceInfo",
+          },
+        },
+        { $unwind: { path: "$sourceInfo", preserveNullAndEmpty: true } },
+        {
+          $project: {
+            _id: 0,
+            source: { $ifNull: ["$sourceInfo.name", "Noma'lum"] },
+            count: 1,
+          },
+        },
         { $sort: { count: -1 } },
       ]),
 
@@ -110,6 +125,28 @@ const getLeadStats = async (req, res, next) => {
         { $match: { ...baseMatch, gender: { $exists: true, $ne: null } } },
         { $group: { _id: "$gender", count: { $sum: 1 } } },
         { $project: { _id: 0, gender: "$_id", count: 1 } },
+      ]),
+
+      Lead.aggregate([
+        { $match: { ...baseMatch, status: "rejected", rejectionReason: { $exists: true, $ne: null } } },
+        { $group: { _id: "$rejectionReason", count: { $sum: 1 } } },
+        {
+          $lookup: {
+            from: "rejectionreasons",
+            localField: "_id",
+            foreignField: "_id",
+            as: "reasonInfo",
+          },
+        },
+        { $unwind: { path: "$reasonInfo", preserveNullAndEmpty: true } },
+        {
+          $project: {
+            _id: 0,
+            reason: { $ifNull: ["$reasonInfo.title", "Noma'lum"] },
+            count: 1,
+          },
+        },
+        { $sort: { count: -1 } },
       ]),
 
       Lead.aggregate([
@@ -158,6 +195,7 @@ const getLeadStats = async (req, res, next) => {
         byStatus,
         bySource,
         byGender,
+        byRejectionReason,
         monthlyTrend,
       },
     });
