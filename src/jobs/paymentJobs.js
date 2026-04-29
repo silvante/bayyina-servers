@@ -1,5 +1,6 @@
 const { getAgenda } = require("../config/agenda");
 const Payment = require("../models/Payment");
+const Enrollment = require("../models/Enrollment");
 const recordService = require("../services/recordService");
 
 const loadPaymentJobs = () => {
@@ -11,9 +12,15 @@ const loadPaymentJobs = () => {
       const now = new Date();
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
+      // Faqat faol (active) ro'yxatdagi o'quvchilarning to'lovlarini overdue qilamiz.
+      // Kursni tugatgan (completed) yoki tashlab ketgan (dropped) o'quvchilarga
+      // avtomatik qarz yozilmasin.
+      const activeEnrollmentIds = await Enrollment.find({ status: "active" }).distinct("_id");
+
       const overdueCandidates = await Payment.find({
         status: "pending",
         month: { $lt: monthStart },
+        enrollment: { $in: activeEnrollmentIds },
       }).select("_id student enrollment amount");
 
       const result = await Payment.updateMany(

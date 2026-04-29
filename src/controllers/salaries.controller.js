@@ -336,7 +336,7 @@ const generateSalaries = async (req, res, next) => {
 
 // POST /salaries — manually create a single salary record
 const createSalary = async (req, res, next) => {
-  const { teacher, month, bonus = 0, deduction = 0, note } = req.body;
+  const { teacher, month, bonus = 0, deduction = 0, note, amount } = req.body;
 
   if (!teacher) {
     return res.status(400).json({
@@ -379,7 +379,8 @@ const createSalary = async (req, res, next) => {
     }
 
     const computed = await computeTeacherSalary(teacher, month);
-    const totalAmount = computed?.totalAmount || 0;
+    // Agar admin qo'lda amount kiritse, u totalAmount bo'ladi; aks holda guruhlardan hisoblanadi
+    const totalAmount = amount != null && amount !== "" ? round(Number(amount)) : (computed?.totalAmount || 0);
     const netAmount = round(totalAmount + Number(bonus || 0) - Number(deduction || 0));
 
     const salary = await Salary.create({

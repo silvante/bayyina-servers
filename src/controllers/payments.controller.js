@@ -35,6 +35,12 @@ const getPayments = async (req, res, next) => {
       filter.student = req.query.student;
     }
 
+    // Filter by group: resolve enrollment IDs that belong to that group
+    if (req.query.group) {
+      const enrollmentIds = await Enrollment.find({ group: req.query.group }).distinct("_id");
+      filter.enrollment = { $in: enrollmentIds };
+    }
+
     const [payments, total] = await Promise.all([
       Payment.find(filter)
         .populate({ path: "student", select: "firstName lastName phone" })
@@ -104,11 +110,27 @@ const createPayment = async (req, res, next) => {
       return res.status(404).json({ code: "enrollmentNotFound", message: "Ro'yxatga olish topilmadi" });
     }
 
-    // Enrollment holati "active" bolmasa => Tolov rad etiladi
+    // O'quvchi kursni muvaffaqiyatli tugatgan — to'lov ham, qarz ham yozilmaydi
+    if (enrollmentDoc.status === "completed") {
+      return res.status(400).json({
+        code: "enrollmentCompleted",
+        message: "Bu o'quvchi kursni muvaffaqiyatli tugatgan. Bitirgan o'quvchiga to'lov va qarz yozilmaydi.",
+      });
+    }
+
+    // O'quvchi kursni yarim yo'lda tashlab ketgan — to'lov ham, qarz ham yozilmaydi
+    if (enrollmentDoc.status === "dropped") {
+      return res.status(400).json({
+        code: "enrollmentDropped",
+        message: "Bu o'quvchi kursni tashlab ketgan. Tashlab ketgan o'quvchiga to'lov va qarz yozilmaydi.",
+      });
+    }
+
+    // Boshqa noma'lum holat bo'lsa (ehtiyot uchun)
     if (enrollmentDoc.status !== "active") {
       return res.status(400).json({
         code: "enrollmentNotActive",
-        message: `Bu o'quvchi ro'yxati "${enrollmentDoc.status}" holatida, to'lov qabul qilinmaydi`,
+        message: "O'quvchining ro'yxat holati faol emas, to'lov qabul qilinmaydi.",
       });
     }
 
