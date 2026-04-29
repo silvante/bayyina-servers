@@ -110,7 +110,7 @@ const getLeadStats = async (req, res, next) => {
             as: "sourceInfo",
           },
         },
-        { $unwind: { path: "$sourceInfo", preserveNullAndEmpty: true } },
+        { $unwind: { path: "$sourceInfo", preserveNullAndEmptyArrays: true } },
         {
           $project: {
             _id: 0,
@@ -138,7 +138,7 @@ const getLeadStats = async (req, res, next) => {
             as: "reasonInfo",
           },
         },
-        { $unwind: { path: "$reasonInfo", preserveNullAndEmpty: true } },
+        { $unwind: { path: "$reasonInfo", preserveNullAndEmptyArrays: true } },
         {
           $project: {
             _id: 0,
@@ -243,7 +243,7 @@ const getStudentStats = async (req, res, next) => {
               as: "groupInfo",
             },
           },
-          { $unwind: { path: "$groupInfo", preserveNullAndEmpty: true } },
+          { $unwind: { path: "$groupInfo", preserveNullAndEmptyArrays: true } },
           {
             $project: {
               _id: 0,
@@ -460,7 +460,7 @@ const getAttendanceStats = async (req, res, next) => {
             as: "groupInfo",
           },
         },
-        { $unwind: { path: "$groupInfo", preserveNullAndEmpty: true } },
+        { $unwind: { path: "$groupInfo", preserveNullAndEmptyArrays: true } },
         {
           $project: {
             _id: 0,
@@ -551,10 +551,70 @@ const getAttendanceStats = async (req, res, next) => {
   }
 };
 
+const getLeadManagerStats = async (req, res, next) => {
+  try {
+    const dateFilter = parseDateRange(req.query, "createdAt");
+    const baseMatch = Object.keys(dateFilter).length ? dateFilter : {};
+
+    const managerStats = await Lead.aggregate([
+      { $match: { createdBy: { $exists: true, $ne: null }, ...baseMatch } },
+      {
+        $group: {
+          _id: "$createdBy",
+          total:     { $sum: 1 },
+          converted: { $sum: { $cond: [{ $eq: ["$status", "converted"] }, 1, 0] } },
+          rejected:  { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] } },
+          new:       { $sum: { $cond: [{ $eq: ["$status", "new"] }, 1, 0] } },
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "manager",
+        },
+      },
+      { $unwind: { path: "$manager", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 0,
+          managerId: "$_id",
+          name: {
+            $concat: [
+              { $ifNull: ["$manager.firstName", ""] },
+              " ",
+              { $ifNull: ["$manager.lastName", ""] },
+            ],
+          },
+          role:      { $ifNull: ["$manager.role", "unknown"] },
+          total:     1,
+          converted: 1,
+          rejected:  1,
+          new:       1,
+          conversionRate: {
+            $cond: [
+              { $gt: ["$total", 0] },
+              { $round: [{ $multiply: [{ $divide: ["$converted", "$total"] }, 100] }, 1] },
+              0,
+            ],
+          },
+        },
+      },
+      { $sort: { total: -1 } },
+    ]);
+
+    res.json({ success: true, data: { managers: managerStats } });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getOverview,
   getLeadStats,
   getStudentStats,
   getRevenueStats,
   getAttendanceStats,
+  getLeadManagerStats,
 };
