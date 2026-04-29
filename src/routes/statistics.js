@@ -8,6 +8,7 @@ const {
   getRevenueStats,
   getAttendanceStats,
   getLeadManagerStats,
+  getMonthlyIncomeStats,
 } = require("../controllers/statistics.controller");
 
 router.use(auth, roleCheck(["admin"]));
@@ -18,5 +19,6 @@ router.get("/leads/managers", getLeadManagerStats);
 router.get("/students", getStudentStats);
 router.get("/revenue", getRevenueStats);
 router.get("/attendance", getAttendanceStats);
+router.get("/monthly-income", getMonthlyIncomeStats);
 
 module.exports = router;

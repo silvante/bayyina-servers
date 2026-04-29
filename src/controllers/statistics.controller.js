@@ -610,6 +610,74 @@ const getLeadManagerStats = async (req, res, next) => {
   }
 };
 
+const getMonthlyIncomeStats = async (req, res, next) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getUTCFullYear();
+    const yearStart = new Date(Date.UTC(year, 0, 1));
+    const yearEnd   = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
+
+    const [paidAgg, pendingAgg, overdueAgg] = await Promise.all([
+      Payment.aggregate([
+        { $match: { status: "paid", paidAt: { $gte: yearStart, $lte: yearEnd } } },
+        { $group: { _id: { $month: "$paidAt" }, amount: { $sum: "$amount" }, count: { $sum: 1 } } },
+      ]),
+      Payment.aggregate([
+        { $match: { status: "pending", createdAt: { $gte: yearStart, $lte: yearEnd } } },
+        { $group: { _id: { $month: "$createdAt" }, amount: { $sum: "$amount" }, count: { $sum: 1 } } },
+      ]),
+      Payment.aggregate([
+        { $match: { status: "overdue", createdAt: { $gte: yearStart, $lte: yearEnd } } },
+        { $group: { _id: { $month: "$createdAt" }, amount: { $sum: "$amount" }, count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const byMonth = (agg) => {
+      const map = {};
+      agg.forEach((r) => { map[r._id] = { amount: r.amount, count: r.count }; });
+      return map;
+    };
+
+    const paid    = byMonth(paidAgg);
+    const pending = byMonth(pendingAgg);
+    const overdue = byMonth(overdueAgg);
+
+    const months = Array.from({ length: 12 }, (_, i) => {
+      const m = i + 1;
+      return {
+        month:   m,
+        year,
+        paid:    paid[m]?.amount    ?? 0,
+        paidCount:    paid[m]?.count     ?? 0,
+        pending: pending[m]?.amount  ?? 0,
+        pendingCount: pending[m]?.count   ?? 0,
+        overdue: overdue[m]?.amount  ?? 0,
+        overdueCount: overdue[m]?.count   ?? 0,
+        total:   (paid[m]?.amount ?? 0) + (pending[m]?.amount ?? 0) + (overdue[m]?.amount ?? 0),
+      };
+    });
+
+    const totalPaid    = months.reduce((s, m) => s + m.paid, 0);
+    const bestMonth    = months.reduce((best, m) => (m.paid > best.paid ? m : best), months[0]);
+    const totalPayments = months.reduce((s, m) => s + m.paidCount, 0);
+
+    res.json({
+      success: true,
+      data: {
+        year,
+        months,
+        summary: {
+          totalPaid,
+          totalPayments,
+          bestMonth: bestMonth.month,
+          avgPerMonth: totalPayments > 0 ? Math.round(totalPaid / 12) : 0,
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getOverview,
   getLeadStats,
@@ -617,4 +685,5 @@ module.exports = {
   getRevenueStats,
   getAttendanceStats,
   getLeadManagerStats,
+  getMonthlyIncomeStats,
 };
