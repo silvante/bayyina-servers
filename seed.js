@@ -20,7 +20,7 @@ const Salary = require("./src/models/Salary");
 const STUDENT_COUNT = 500;
 const TEACHER_COUNT = 30;
 const GROUP_COUNT = 40;
-const LEAD_COUNT = 150;
+const LEAD_COUNT = 500;
 const NOTIFICATION_COUNT = 60;
 const ATTENDANCE_WINDOW_DAYS = 60;
 const SALARY_MONTHS = 4;
@@ -671,8 +671,13 @@ async function main() {
   for (let i = 0; i < LEAD_COUNT; i++) {
     const gender = Math.random() < 0.5 ? "male" : "female";
     const firstName = gender === "male" ? pick(FIRST_NAMES_MALE) : pick(FIRST_NAMES_FEMALE);
-    const status = pickWeighted(LEAD_STATUSES, [25, 15, 18, 12, 18, 12]);
-    const createdAt = new Date(now.getTime() - randInt(0, 90) * 86400000);
+    const status = pickWeighted(LEAD_STATUSES, [20, 15, 20, 12, 20, 13]);
+    // Spread leads over last 6 months, more recent months get more leads
+    const daysAgo = pickWeighted(
+      [randInt(0, 15), randInt(16, 45), randInt(46, 90), randInt(91, 120), randInt(121, 150), randInt(151, 180)],
+      [30, 25, 20, 12, 8, 5]
+    );
+    const createdAt = new Date(now.getTime() - daysAgo * 86400000);
     const isConverted = status === "converted";
     const isRejected = status === "rejected";
 
@@ -683,7 +688,7 @@ async function main() {
       age: randInt(8, 50),
       source: pick(leadSources)._id,
       interest: pick(LEAD_INTERESTS),
-      uniqueLink: `BAY-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+      uniqueLink: `BAY-${createdAt.getTime()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
       ...(Math.random() < 0.6 && {
         linkClickedAt: new Date(createdAt.getTime() + randInt(1, 48) * 3600000),
       }),
@@ -695,9 +700,11 @@ async function main() {
       ...(["scheduled", "interested"].includes(status) && {
         scheduledAt: new Date(now.getTime() + randInt(1, 14) * 86400000),
       }),
-      lastActivityAt: new Date(createdAt.getTime() + randInt(0, 5) * 86400000),
+      lastActivityAt: new Date(Math.min(createdAt.getTime() + randInt(0, 7) * 86400000, now.getTime())),
       notes: pick(LEAD_NOTES),
       createdBy: admin._id,
+      createdAt,
+      updatedAt: createdAt,
     });
   }
   const leads = await Lead.insertMany(leadDocs, { ordered: false });
