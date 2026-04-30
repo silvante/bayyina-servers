@@ -15,6 +15,7 @@ const salariesRoute = require("../routes/salaries");
 const leadSourcesRoute = require("../routes/leadSources");
 const courseTypesRoute = require("../routes/courseTypes");
 const rejectionReasonsRoute = require("../routes/rejectionReasons");
+const selectOptionsRoute    = require("../routes/selectOptions");
 
 // Error handler
 const errorHandler = require("../middlewares/errorHandler");
@@ -36,5 +37,6 @@ app.use("/api/salaries", salariesRoute);
 app.use("/api/lead-sources", leadSourcesRoute);
 app.use("/api/course-types", courseTypesRoute);
 app.use("/api/rejection-reasons", rejectionReasonsRoute);
+app.use("/api/select-options",   selectOptionsRoute);
 
 app.use(errorHandler);
