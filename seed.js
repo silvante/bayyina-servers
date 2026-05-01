@@ -7,6 +7,7 @@ const Group = require("./src/models/Group");
 const Enrollment = require("./src/models/Enrollment");
 const Payment = require("./src/models/Payment");
 const Attendance = require("./src/models/Attendance");
+const RatingConfig = require("./src/models/RatingConfig");
 const Lead = require("./src/models/Lead");
 const LeadSource = require("./src/models/LeadSource");
 const CourseType = require("./src/models/CourseType");
@@ -234,6 +235,7 @@ async function main() {
     Enrollment.deleteMany({}),
     Payment.deleteMany({}),
     Attendance.deleteMany({}),
+    RatingConfig.deleteMany({}),
     Lead.deleteMany({}),
     LeadSource.deleteMany({}),
     CourseType.deleteMany({}),
@@ -619,12 +621,17 @@ async function main() {
     while (cursor <= endCursor) {
       if (allowedDays.has(weekdayName(cursor))) {
         const present = Math.random() < 0.85;
+        // Stars: weighted so most students get 3-5 (realistic classroom scenario)
+        const stars = present
+          ? pickWeighted([1, 2, 3, 4, 5], [4, 9, 25, 37, 25])
+          : null;
         attendanceDocs.push({
           enrollment: en._id,
           group: en.group,
           student: en.student,
           date: new Date(cursor.getTime()),
           status: present ? "present" : "absent",
+          rating_stars: stars,
           markedBy: group.teacher,
           ...(Math.random() < 0.05 && {
             note: present ? "Vaqtida keldi" : "Kasallik bilan",
@@ -830,6 +837,10 @@ async function main() {
 
   await Record.insertMany(recordDocs, { ordered: false });
   console.log(`✅ ${recordDocs.length} audit yozuvi`);
+
+  // ========== RATING CONFIG ==========
+  await RatingConfig.create({ attendedDayPoints: 10, starMultiplier: 2, lookbackDays: 30 });
+  console.log("✅ RatingConfig (standart sozlamalar)");
 
   console.log("\n=========================================");
   console.log("SEED YAKUNLANDI ✅");
