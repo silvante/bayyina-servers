@@ -2619,7 +2619,7 @@ paths:
       description: |
         Searches users with role `teacher` across multiple fields and returns paginated results.
 
-        **Free-text search (`q`)** performs a case-insensitive regex match against:
+        **Free-text search (`q`)** performs a case-insensitive prefix match (starts with) against:
         - `firstName` — first name
         - `lastName` — last name
         - `source` — lead source / referral label
@@ -2630,11 +2630,11 @@ paths:
         **Field filters** can be used alongside or instead of `q`:
         | Parameter | Type | Behaviour |
         |-----------|------|-----------|
-        | `firstName` | string | Partial, case-insensitive match |
-        | `lastName` | string | Partial, case-insensitive match |
+        | `firstName` | string | Prefix match (starts with), case-insensitive |
+        | `lastName` | string | Prefix match (starts with), case-insensitive |
         | `phone` | integer | Exact numeric match |
         | `gender` | string | Exact match (`male` / `female`) |
-        | `source` | string | Partial, case-insensitive match |
+        | `source` | string | Prefix match (starts with), case-insensitive |
         | `age` | integer | Exact match |
         | `minAge` | integer | Age ≥ value |
         | `maxAge` | integer | Age ≤ value |
@@ -2649,21 +2649,21 @@ paths:
         - name: q
           in: query
           required: false
-          description: Free-text search term (case-insensitive). Matched against firstName, lastName, source, gender, and numerically against phone and age.
+          description: Free-text search term (case-insensitive prefix match). Matched against firstName, lastName, source, gender, and numerically against phone and age.
           schema:
             type: string
             example: "Ali"
         - name: firstName
           in: query
           required: false
-          description: Filter by first name (partial match)
+          description: Filter by first name (prefix match, starts with, case-insensitive)
           schema:
             type: string
             example: "Jasur"
         - name: lastName
           in: query
           required: false
-          description: Filter by last name (partial match)
+          description: Filter by last name (prefix match, starts with, case-insensitive)
           schema:
             type: string
             example: "Toshmatov"
@@ -2684,7 +2684,7 @@ paths:
         - name: source
           in: query
           required: false
-          description: Filter by source (partial match)
+          description: Filter by source (prefix match, starts with, case-insensitive)
           schema:
             type: string
             example: "instagram"
@@ -2863,7 +2863,7 @@ paths:
         Searches users with role `student` across multiple fields and returns paginated results.
         Each matching student includes their `enrollments` array with populated `group` data.
 
-        **Free-text search (`q`)** performs a case-insensitive regex match against:
+        **Free-text search (`q`)** performs a case-insensitive prefix match (starts with) against:
         - `firstName` — first name
         - `lastName` — last name
         - `source` — lead source / referral label
@@ -2874,11 +2874,11 @@ paths:
         **Field filters** can be used alongside or instead of `q`:
         | Parameter | Type | Behaviour |
         |-----------|------|-----------|
-        | `firstName` | string | Partial, case-insensitive match |
-        | `lastName` | string | Partial, case-insensitive match |
+        | `firstName` | string | Prefix match (starts with), case-insensitive |
+        | `lastName` | string | Prefix match (starts with), case-insensitive |
         | `phone` | integer | Exact numeric match |
         | `gender` | string | Exact match (`male` / `female`) |
-        | `source` | string | Partial, case-insensitive match |
+        | `source` | string | Prefix match (starts with), case-insensitive |
         | `age` | integer | Exact match |
         | `minAge` | integer | Age ≥ value |
         | `maxAge` | integer | Age ≤ value |
@@ -2893,21 +2893,21 @@ paths:
         - name: q
           in: query
           required: false
-          description: Free-text search term (case-insensitive). Matched against firstName, lastName, source, gender, and numerically against phone and age.
+          description: Free-text search term (case-insensitive prefix match). Matched against firstName, lastName, source, gender, and numerically against phone and age.
           schema:
             type: string
             example: "Kamola"
         - name: firstName
           in: query
           required: false
-          description: Filter by first name (partial match)
+          description: Filter by first name (prefix match, starts with, case-insensitive)
           schema:
             type: string
             example: "Kamola"
         - name: lastName
           in: query
           required: false
-          description: Filter by last name (partial match)
+          description: Filter by last name (prefix match, starts with, case-insensitive)
           schema:
             type: string
             example: "Yusupova"
@@ -2928,7 +2928,7 @@ paths:
         - name: source
           in: query
           required: false
-          description: Filter by source (partial match)
+          description: Filter by source (prefix match, starts with, case-insensitive)
           schema:
             type: string
             example: "referral"
@@ -3245,7 +3245,7 @@ paths:
         Searches groups across multiple fields and returns paginated results.
         Each result has the `teacher` field populated (firstName, lastName, phone).
 
-        **Free-text search (`q`)** performs a case-insensitive regex match against:
+        **Free-text search (`q`)** performs a case-insensitive prefix match (starts with) against:
         - `name` — group name
         - `description` — group description
         - `room` — classroom or room identifier
@@ -3257,7 +3257,7 @@ paths:
         | Parameter | Type | Behaviour |
         |-----------|------|-----------|
         | `teacher` | ObjectId | Exact match by teacher `_id` (admin only; teachers see only their own groups) |
-        | `room` | string | Partial, case-insensitive match |
+        | `room` | string | Prefix match (starts with), case-insensitive |
         | `day` | string | Exact match against `schedule.days` array (`Monday` … `Sunday`) |
         | `price` | number | Exact price match |
         | `minPrice` | number | Price ≥ value |
@@ -3274,7 +3274,7 @@ paths:
           in: query
           required: false
           description: |
-            Free-text search term. Case-insensitive regex matched against name, description, room,
+            Free-text search term. Case-insensitive prefix match (starts with) against name, description, room,
             schedule.time, teacher name (admin), and numerically against price.
           schema:
             type: string
@@ -3289,7 +3289,7 @@ paths:
         - name: room
           in: query
           required: false
-          description: Filter by room (partial match)
+          description: Filter by room (prefix match, starts with, case-insensitive)
           schema:
             type: string
             example: "201"
@@ -4044,7 +4044,7 @@ paths:
         Results are populated with `student` (firstName, lastName, phone), `enrollment`
         (group, status), and `createdBy` (firstName, lastName).
 
-        **Free-text search (`q`)** performs a case-insensitive regex match against:
+        **Free-text search (`q`)** performs a case-insensitive prefix match (starts with) against:
         - `note` — free-text note on the payment
         - `amount` — matched numerically (only when `q` is a valid number)
         - Student `firstName` / `lastName` — matched by resolving student references
@@ -4078,7 +4078,7 @@ paths:
           in: query
           required: false
           description: |
-            Free-text search term. Case-insensitive regex matched against note, student name,
+            Free-text search term. Case-insensitive prefix match (starts with) against note, student name,
             and numerically against amount and student phone.
           schema:
             type: string
@@ -5084,7 +5084,7 @@ paths:
         Searches leads across multiple fields and returns paginated results.
         Results are populated with `source`, `courseType`, `rejectionReason`, and `createdBy`.
 
-        **Free-text search (`q`)** performs a case-insensitive regex match against:
+        **Free-text search (`q`)** performs a case-insensitive prefix match (starts with) against:
         - `firstName` — lead's first name
         - `telegramId` — Telegram user ID string
         - `interest` — stated interest / desired course
@@ -5117,7 +5117,7 @@ paths:
           in: query
           required: false
           description: |
-            Free-text search term. Case-insensitive regex matched against firstName, telegramId,
+            Free-text search term. Case-insensitive prefix match (starts with) against firstName, telegramId,
             interest, notes, level, and numerically against phone and age.
           schema:
             type: string
@@ -5160,7 +5160,7 @@ paths:
         - name: level
           in: query
           required: false
-          description: Filter by self-reported level (partial match)
+          description: Filter by self-reported level (prefix match, starts with, case-insensitive)
           schema:
             type: string
             example: "A2"
@@ -5308,7 +5308,7 @@ paths:
 
         Sorted by `createdAt` descending (newest first).
 
-        The `search` query is a case-insensitive substring match against `firstName`.
+        The `search` query is a case-insensitive prefix match (starts with) against `firstName`.
         If the search term parses as a number, it is also matched against `phone` exactly.
       operationId: getLeads
       security:
@@ -5344,7 +5344,7 @@ paths:
             example: "unpaid"
         - name: search
           in: query
-          description: Search by `firstName` (substring, case-insensitive) or exact `phone`
+          description: Search by `firstName` (prefix match, starts with, case-insensitive) or exact `phone`
           schema:
             type: string
             example: "ali"
@@ -6745,7 +6745,7 @@ paths:
             use the `refs` map, so you get every record *mentioning* that participant —
             even ones where it's not the primary entity (e.g. payments for a given student).
           - **`from` / `to`** bound the window by `createdAt`.
-          - **`search`** runs a case-insensitive regex on `description` and `code`
+          - **`search`** runs a case-insensitive prefix match (starts with) on `description` and `code`
             (useful for typing in a code like `REC-20260418-0001`).
 
         Examples:
@@ -6852,7 +6852,7 @@ paths:
         - name: search
           in: query
           required: false
-          description: Case-insensitive regex match against `description` and `code`.
+          description: Case-insensitive prefix match (starts with) against `description` and `code`.
           schema:
             type: string
             example: "Ali Valiyev"
@@ -7806,13 +7806,13 @@ paths:
             example: "IELTS"
         - name: type
           in: query
-          description: Filter by course subject area (partial match)
+          description: Filter by course subject area (prefix match, starts with, case-insensitive)
           schema:
             type: string
             example: "English"
         - name: direction
           in: query
-          description: Filter by direction/level (partial match)
+          description: Filter by direction/level (prefix match, starts with, case-insensitive)
           schema:
             type: string
             example: "Advanced"

@@ -62,7 +62,7 @@ const getLeads = async (req, res, next) => {
     if (req.query.search) {
       const term = String(req.query.search).trim();
       if (term) {
-        const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+        const regex = new RegExp("^" + term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
         const orClauses = [{ firstName: regex }];
         const asNumber = Number(term);
         if (!Number.isNaN(asNumber)) orClauses.push({ phone: asNumber });

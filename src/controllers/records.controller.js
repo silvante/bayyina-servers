@@ -69,7 +69,7 @@ const getRecords = async (req, res, next) => {
     if (search) {
       const term = String(search).trim();
       if (term) {
-        const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+        const regex = new RegExp("^" + term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
         filter.$or = [{ description: regex }, { code: regex }];
       }
     }
