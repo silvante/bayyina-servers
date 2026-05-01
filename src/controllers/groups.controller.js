@@ -5,7 +5,7 @@ const Enrollment = require("../models/Enrollment");
 const User = require("../models/User");
 const recordService = require("../services/recordService");
 
-const GROUP_UPDATABLE_FIELDS = ["name", "description", "price", "teacher", "schedule", "room"];
+const GROUP_UPDATABLE_FIELDS = ["name", "description", "price", "teacher", "schedule", "room", "salaryType", "salaryValue", "minSalary", "showPaymentsToTeacher"];
 
 // GET /groups
 const getGroups = async (req, res, next) => {
@@ -27,8 +27,17 @@ const getGroups = async (req, res, next) => {
       Group.countDocuments(filter),
     ]);
 
+    const isTeacher = req.user.role === "teacher";
+    const result = isTeacher
+      ? groups.map((g) => {
+          const obj = g.toObject();
+          if (!obj.showPaymentsToTeacher) delete obj.price;
+          return obj;
+        })
+      : groups;
+
     res.json({
-      groups,
+      groups: result,
       ...buildPaginationMeta(total, page, limit),
       code: "groupsFound",
       message: texts.groupsFound,
@@ -57,7 +66,12 @@ const getGroup = async (req, res, next) => {
       .select("-group -__v")
       .populate({ path: "student", select: "-password -__v" });
 
-    res.json({ group, enrollments, code: "groupsFound", message: texts.groupsFound });
+    const groupObj = group.toObject();
+    if (req.user.role === "teacher" && !groupObj.showPaymentsToTeacher) {
+      delete groupObj.price;
+    }
+
+    res.json({ group: groupObj, enrollments, code: "groupsFound", message: texts.groupsFound });
   } catch (err) {
     next(err);
   }
@@ -255,8 +269,17 @@ const searchGroups = async (req, res, next) => {
       Group.countDocuments(filter),
     ]);
 
+    const isTeacher = req.user.role === "teacher";
+    const result = isTeacher
+      ? groups.map((g) => {
+          const obj = g.toObject();
+          if (!obj.showPaymentsToTeacher) delete obj.price;
+          return obj;
+        })
+      : groups;
+
     res.json({
-      groups,
+      groups: result,
       ...buildPaginationMeta(total, page, limit),
       code: "groupsFound",
       message: texts.groupsFound,

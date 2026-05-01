@@ -9,6 +9,7 @@ const SalaryGroupBreakdown = new mongoose.Schema(
       enum: ["percentage", "per_student", "fixed"],
     },
     salaryValue: { type: Number, default: 0 },
+    minSalary: { type: Number, default: 0 },
     studentCount: { type: Number, default: 0 },
     paidStudentsCount: { type: Number, default: 0 },
     groupRevenue: { type: Number, default: 0 },

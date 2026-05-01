@@ -37,6 +37,8 @@ const Group = new mongoose.Schema(
       default: "percentage",
     },
     salaryValue: { type: Number, default: 30 },
+    minSalary: { type: Number, default: 0 },
+    showPaymentsToTeacher: { type: Boolean, default: false },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

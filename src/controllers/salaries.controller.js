@@ -88,6 +88,7 @@ async function computeTeacherSalary(teacherId, month) {
     const paidStudentsCount = rev.paidStudentsCount || 0;
     const salaryType = g.salaryType || "percentage";
     const salaryValue = g.salaryValue || 0;
+    const minSalary = g.minSalary || 0;
 
     let amount = 0;
     if (salaryType === "percentage") {
@@ -97,12 +98,16 @@ async function computeTeacherSalary(teacherId, month) {
     } else if (salaryType === "fixed") {
       amount = salaryValue;
     }
+    if (salaryType !== "fixed" && minSalary > 0) {
+      amount = Math.max(amount, minSalary);
+    }
 
     return {
       group: g._id,
       groupName: g.name,
       salaryType,
       salaryValue,
+      minSalary,
       studentCount,
       paidStudentsCount,
       groupRevenue: round(groupRevenue),
