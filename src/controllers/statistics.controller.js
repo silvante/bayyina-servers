@@ -678,6 +678,39 @@ const getMonthlyIncomeStats = async (req, res, next) => {
   }
 };
 
+const getInterestStats = async (req, res, next) => {
+  try {
+    const dateFilter = parseDateRange(req.query, "createdAt");
+    const baseMatch = Object.keys(dateFilter).length ? dateFilter : {};
+
+    const byInterest = await Lead.aggregate([
+      { $match: { ...baseMatch, interest: { $exists: true, $ne: null } } },
+      { $group: { _id: "$interest", count: { $sum: 1 } } },
+      {
+        $lookup: {
+          from: "interests",
+          localField: "_id",
+          foreignField: "_id",
+          as: "interestInfo",
+        },
+      },
+      { $unwind: { path: "$interestInfo", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 0,
+          name: { $ifNull: ["$interestInfo.name", "Noma'lum"] },
+          count: 1,
+        },
+      },
+      { $sort: { count: -1 } },
+    ]);
+
+    res.json({ success: true, data: { byInterest } });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getOverview,
   getLeadStats,
@@ -686,4 +719,5 @@ module.exports = {
   getAttendanceStats,
   getLeadManagerStats,
   getMonthlyIncomeStats,
+  getInterestStats,
 };

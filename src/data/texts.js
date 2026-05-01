@@ -73,6 +73,13 @@ const texts = {
   courseTypeNotFound: "Kurs turi topilmadi",
   courseTypesFound: "Kurs turlari ro'yxati olindi",
 
+  // Interests
+  interestCreated: "Qiziqish muvaffaqiyatli yaratildi",
+  interestUpdated: "Qiziqish muvaffaqiyatli yangilandi",
+  interestDeleted: "Qiziqish muvaffaqiyatli o'chirildi",
+  interestNotFound: "Qiziqish topilmadi",
+  interestsFound: "Qiziqishlar ro'yxati olindi",
+
   // Rejection Reasons
   rejectionReasonCreated: "Rad etish sababi muvaffaqiyatli yaratildi",
   rejectionReasonUpdated: "Rad etish sababi muvaffaqiyatli yangilandi",

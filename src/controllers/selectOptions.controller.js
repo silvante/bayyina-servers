@@ -1,6 +1,7 @@
 const LeadSource      = require("../models/LeadSource");
 const CourseType      = require("../models/CourseType");
 const RejectionReason = require("../models/RejectionReason");
+const Interest        = require("../models/Interest");
 
 // ─── Static enum options (system values — not editable by admin) ──────────────
 const STATIC = {
@@ -69,6 +70,10 @@ const DB_FETCHERS = {
     const docs = await RejectionReason.find().sort({ createdAt: 1 }).lean();
     return docs.map((d) => ({ _id: d._id, value: String(d._id), label: d.title }));
   },
+  interest_type: async () => {
+    const docs = await Interest.find().sort({ createdAt: 1 }).lean();
+    return docs.map((d) => ({ _id: d._id, value: String(d._id), label: d.name }));
+  },
 };
 
 const VALID_TYPES = new Set([...Object.keys(STATIC), ...Object.keys(DB_FETCHERS)]);
@@ -102,6 +107,7 @@ const getTypes = async (req, res) => {
     { type: "lead_source",       label: "Lead manbalari",     kind: "dynamic" },
     { type: "course_type",       label: "Kurs turlari",        kind: "dynamic" },
     { type: "rejection_reason",  label: "Rad etish sabablari", kind: "dynamic" },
+    { type: "interest_type",     label: "Qiziqish turlari",    kind: "dynamic" },
     { type: "lead_status",       label: "Lead holatlari",      kind: "static"  },
     { type: "enrollment_status", label: "Ro'yxat holatlari",   kind: "static"  },
     { type: "payment_status",    label: "To'lov holatlari",    kind: "static"  },

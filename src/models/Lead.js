@@ -12,7 +12,11 @@ const Lead = new mongoose.Schema(
       ref: "LeadSource",
       sparse: true,
     },
-    interest: { type: String },
+    interest: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Interest",
+      sparse: true,
+    },
     uniqueLink: { type: String, unique: true, index: true },
     linkClickedAt: { type: Date, default: null },
     courseType: {

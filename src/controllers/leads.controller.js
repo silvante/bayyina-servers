@@ -32,6 +32,7 @@ const UPDATABLE_FIELDS = [
 
 const POPULATE_FIELDS = [
   { path: "source", select: "name slug" },
+  { path: "interest", select: "name" },
   { path: "courseType", select: "name type direction" },
   { path: "rejectionReason", select: "title" },
   { path: "createdBy", select: "firstName lastName" },
@@ -54,6 +55,7 @@ const getLeads = async (req, res, next) => {
 
     if (req.query.status) filter.status = req.query.status;
     if (req.query.source) filter.source = req.query.source;
+    if (req.query.interest) filter.interest = req.query.interest;
     if (req.query.courseType) filter.courseType = req.query.courseType;
     if (req.query.paymentStatus) filter.paymentStatus = req.query.paymentStatus;
 

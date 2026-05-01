@@ -1,6 +1,7 @@
 const texts = require("../data/texts");
 const { pickAllowedFields, getPagination, buildPaginationMeta, buildSearchRegex } = require("../utils/helpers");
 const LeadSource = require("../models/LeadSource");
+const Lead = require("../models/Lead");
 const recordService = require("../services/recordService");
 
 const UPDATABLE_FIELDS = ["name", "slug"];
@@ -122,10 +123,15 @@ const updateLeadSource = async (req, res, next) => {
 // DELETE /lead-sources/:id — admin only
 const deleteLeadSource = async (req, res, next) => {
   try {
-    const leadSource = await LeadSource.findByIdAndDelete(req.params.id);
+    const leadSource = await LeadSource.findById(req.params.id);
     if (!leadSource) {
       return res.status(404).json({ code: "leadSourceNotFound", message: texts.leadSourceNotFound });
     }
+
+    // Nullify source references in leads before deleting
+    await Lead.updateMany({ source: req.params.id }, { $unset: { source: "" } });
+
+    await LeadSource.findByIdAndDelete(req.params.id);
 
     await recordService.createRecord({
       eventType: "LEAD_SOURCE_DELETED",
