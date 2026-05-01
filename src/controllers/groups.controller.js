@@ -5,7 +5,7 @@ const Enrollment = require("../models/Enrollment");
 const User = require("../models/User");
 const recordService = require("../services/recordService");
 
-const GROUP_UPDATABLE_FIELDS = ["name", "description", "price", "teacher", "schedule", "room", "salaryType", "salaryValue", "minSalary", "showPaymentsToTeacher"];
+const GROUP_UPDATABLE_FIELDS = ["name", "description", "price", "teacher", "schedule", "room", "salaryOverride", "salaryType", "salaryValue", "minSalary", "showPaymentsToTeacher"];
 
 // GET /groups
 const getGroups = async (req, res, next) => {

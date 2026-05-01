@@ -15,6 +15,9 @@ const User = new mongoose.Schema(
     gender: { type: String, enum: ["male", "female"] },
     age: { type: Number },
     source: { type: String },
+    salaryType: { type: String, enum: ["percentage", "per_student", "fixed"] },
+    salaryValue: { type: Number },
+    minSalary: { type: Number, default: 0 },
   },
   { timestamps: true },
 );

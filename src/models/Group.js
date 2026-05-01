@@ -31,6 +31,7 @@ const Group = new mongoose.Schema(
       required: true,
     },
     room: { type: String },
+    salaryOverride: { type: Boolean, default: false },
     salaryType: {
       type: String,
       enum: ["percentage", "per_student", "fixed"],

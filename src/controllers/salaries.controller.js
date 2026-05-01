@@ -32,7 +32,10 @@ async function computeTeacherSalary(teacherId, month) {
   if (!bounds) return null;
   const { start, end } = bounds;
 
-  const groups = await Group.find({ teacher: teacherId }).lean();
+  const [groups, teacherDoc] = await Promise.all([
+    Group.find({ teacher: teacherId }).lean(),
+    User.findById(teacherId).select("salaryType salaryValue minSalary").lean(),
+  ]);
   const groupIds = groups.map((g) => g._id);
 
   // Active enrollment counts per group
@@ -86,9 +89,10 @@ async function computeTeacherSalary(teacherId, month) {
     const rev = revenueByGroup[gid] || { revenue: 0, paidStudentsCount: 0 };
     const groupRevenue = rev.revenue || 0;
     const paidStudentsCount = rev.paidStudentsCount || 0;
-    const salaryType = g.salaryType || "percentage";
-    const salaryValue = g.salaryValue || 0;
-    const minSalary = g.minSalary || 0;
+    // Group override → teacher-level fallback → built-in default
+    const salaryType  = g.salaryOverride ? g.salaryType  : (teacherDoc?.salaryType  || g.salaryType  || "percentage");
+    const salaryValue = g.salaryOverride ? g.salaryValue : (teacherDoc?.salaryValue ?? g.salaryValue ?? 0);
+    const minSalary   = g.salaryOverride ? g.minSalary   : (teacherDoc?.minSalary   ?? g.minSalary   ?? 0);
 
     let amount = 0;
     if (salaryType === "percentage") {

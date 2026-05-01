@@ -19,6 +19,9 @@ const USER_UPDATABLE_FIELDS = [
   "age",
   "source",
   "role",
+  "salaryType",
+  "salaryValue",
+  "minSalary",
 ];
 
 const roleToEventType = (role) => {
@@ -288,14 +291,16 @@ const updateUser = async (req, res, next) => {
     ];
     if (req.user.role === "admin") allowed.push("role", "password");
 
-    const updates = pickAllowedFields(req.body, allowed);
-
     const existing = await User.findById(targetId).select("-password");
     if (!existing) {
-      return res
-        .status(404)
-        .json({ code: "userNotFound", message: texts.userNotFound });
+      return res.status(404).json({ code: "userNotFound", message: texts.userNotFound });
     }
+
+    if (req.user.role === "admin" && existing.role === "teacher") {
+      allowed.push("salaryType", "salaryValue", "minSalary");
+    }
+
+    const updates = pickAllowedFields(req.body, allowed);
 
     const user = await User.findByIdAndUpdate(targetId, updates, {
       new: true,
