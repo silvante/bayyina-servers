@@ -9,7 +9,7 @@ const sendMessage = async (req, res, next) => {
     return res.status(400).json({ code: 'missingField', message: 'Xabar matni kiritilishi shart' });
   }
 
-  const BOT_TOKEN = process.env.BOT_TOKEN;
+  const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || process.env.MAIN_BOT_TOKEN;
   if (!BOT_TOKEN) {
     return res.status(500).json({ code: 'botTokenMissing', message: 'BOT_TOKEN sozlanmagan' });
   }
