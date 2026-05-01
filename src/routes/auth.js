@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const { login, sendOtp, verifyOtp, profile } = require("../controllers/auth.controller");
+const { login, sendOtp, verifyOtp, profile, linkTelegram } = require("../controllers/auth.controller");
 const { auth } = require("../middlewares/auth");
 
 /**
@@ -31,5 +31,12 @@ router.post("/verify-otp", verifyOtp);
  * Access: Authenticated
  */
 router.get("/profile", auth, profile);
+
+/**
+ * POST /auth/link-telegram
+ * Save Telegram ID for the current user
+ * Access: Authenticated
+ */
+router.post("/link-telegram", auth, linkTelegram);
 
 module.exports = router;

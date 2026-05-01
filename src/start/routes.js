@@ -17,6 +17,7 @@ const courseTypesRoute = require("../routes/courseTypes");
 const rejectionReasonsRoute = require("../routes/rejectionReasons");
 const selectOptionsRoute    = require("../routes/selectOptions");
 const interestsRoute        = require("../routes/interests");
+const telegramRoute         = require("../routes/telegram");
 
 // Error handler
 const errorHandler = require("../middlewares/errorHandler");
@@ -40,5 +41,6 @@ app.use("/api/course-types", courseTypesRoute);
 app.use("/api/rejection-reasons", rejectionReasonsRoute);
 app.use("/api/select-options",   selectOptionsRoute);
 app.use("/api/interests",        interestsRoute);
+app.use("/api/telegram",         telegramRoute);
 
 app.use(errorHandler);
