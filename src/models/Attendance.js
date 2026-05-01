@@ -23,6 +23,12 @@ const Attendance = new mongoose.Schema(
       enum: ["present", "absent"],
       required: true,
     },
+    rating_stars: {
+      type: Number,
+      min: 1,
+      max: 5,
+      default: null,
+    },
     markedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

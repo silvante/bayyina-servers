@@ -90,12 +90,18 @@ const bulkMarkAttendance = async (req, res, next) => {
           .json({ code: "invalidStatus", message: "Status noto'g'ri" });
       }
 
+      const ratingStars =
+        entry.status === "present" && entry.rating_stars >= 1 && entry.rating_stars <= 5
+          ? Math.round(entry.rating_stars)
+          : null;
+
       ops.push({
         updateOne: {
           filter: { enrollment: enrollment._id, date: sessionDate },
           update: {
             $set: {
               status: entry.status,
+              rating_stars: ratingStars,
               note: entry.note || "",
               markedBy: req.user._id,
               group: group._id,
@@ -290,12 +296,13 @@ const getSessionAttendance = async (req, res, next) => {
     const rows = enrollments.map((enrollment) => {
       const record = recordByEnrollment.get(String(enrollment._id));
       return {
-        enrollment: enrollment._id,
-        student: enrollment.student,
-        status: record ? record.status : null,
-        note: record ? record.note : null,
-        attendanceId: record ? record._id : null,
-        markedAt: record ? record.updatedAt : null,
+        enrollment:   enrollment._id,
+        student:      enrollment.student,
+        status:       record ? record.status        : null,
+        rating_stars: record ? record.rating_stars  : null,
+        note:         record ? record.note          : null,
+        attendanceId: record ? record._id           : null,
+        markedAt:     record ? record.updatedAt     : null,
       };
     });
 
@@ -393,7 +400,7 @@ const updateAttendance = async (req, res, next) => {
         .json({ code: "notGroupTeacher", message: texts.notGroupTeacher });
     }
 
-    const { status, note } = req.body;
+    const { status, note, rating_stars } = req.body;
     if (status !== undefined) {
       if (!ALLOWED_STATUSES.includes(status)) {
         return res
@@ -401,6 +408,11 @@ const updateAttendance = async (req, res, next) => {
           .json({ code: "invalidStatus", message: "Status noto'g'ri" });
       }
       attendance.status = status;
+      if (status === "absent") attendance.rating_stars = null;
+    }
+    if (rating_stars !== undefined && attendance.status === "present") {
+      attendance.rating_stars =
+        rating_stars >= 1 && rating_stars <= 5 ? Math.round(rating_stars) : null;
     }
     if (note !== undefined) attendance.note = note;
     attendance.markedBy = req.user._id;
@@ -467,11 +479,69 @@ const deleteAttendance = async (req, res, next) => {
   }
 };
 
+// GET /attendance/summary?group=&month=YYYY-MM
+// Returns totalSessions and per-enrollment present count for the given month
+const getAttendanceSummary = async (req, res, next) => {
+  try {
+    const { group: groupId, month } = req.query;
+    if (!groupId) {
+      return res.status(400).json({ code: "missingField", message: "Guruh kiritilishi shart" });
+    }
+
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ code: "groupNotFound", message: texts.groupNotFound });
+    }
+
+    const allowed = await assertCanReadGroup(req, group);
+    if (!allowed) {
+      return res.status(403).json({ code: "forbidden", message: texts.forbidden });
+    }
+
+    // Parse month (YYYY-MM) or default to current month
+    const today = new Date();
+    let year  = today.getUTCFullYear();
+    let monthN = today.getUTCMonth(); // 0-based
+
+    if (month && /^\d{4}-\d{2}$/.test(month)) {
+      const [y, m] = month.split("-").map(Number);
+      year   = y;
+      monthN = m - 1;
+    }
+
+    const from = new Date(Date.UTC(year, monthN, 1));
+    const to   = new Date(Date.UTC(year, monthN + 1, 0)); // last day of month
+
+    // Clamp "to" to today so future sessions aren't counted
+    const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+    const effectiveTo = to < todayUTC ? to : todayUTC;
+
+    const totalSessions = expandScheduleDates(group.schedule.days, from, effectiveTo).length;
+
+    const records = await Attendance.find({
+      group: group._id,
+      date:  { $gte: from, $lte: effectiveTo },
+      status: "present",
+    }).select("enrollment");
+
+    const perEnrollment = {};
+    for (const r of records) {
+      const key = String(r.enrollment);
+      perEnrollment[key] = (perEnrollment[key] ?? 0) + 1;
+    }
+
+    res.json({ totalSessions, perEnrollment });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   bulkMarkAttendance,
   getAttendances,
   getSessionAttendance,
   getScheduleSessions,
+  getAttendanceSummary,
   updateAttendance,
   deleteAttendance,
 };

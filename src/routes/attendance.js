@@ -6,6 +6,7 @@ const {
   getAttendances,
   getSessionAttendance,
   getScheduleSessions,
+  getAttendanceSummary,
   updateAttendance,
   deleteAttendance,
 } = require("../controllers/attendance.controller");
@@ -31,6 +32,13 @@ router.get("/session", auth, getSessionAttendance);
  * Access: admin, teacher (own group), student (if enrolled)
  */
 router.get("/sessions", auth, getScheduleSessions);
+
+/**
+ * GET /attendance/summary?group=&month=YYYY-MM
+ * Per-enrollment present count + total sessions for the month.
+ * Access: admin, teacher (own group)
+ */
+router.get("/summary", auth, getAttendanceSummary);
 
 /**
  * POST /attendance/bulk
