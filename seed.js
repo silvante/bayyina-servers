@@ -11,6 +11,7 @@ const Lead = require("./src/models/Lead");
 const LeadSource = require("./src/models/LeadSource");
 const CourseType = require("./src/models/CourseType");
 const RejectionReason = require("./src/models/RejectionReason");
+const Interest = require("./src/models/Interest");
 const Notification = require("./src/models/Notification");
 const Record = require("./src/models/Record");
 const Counter = require("./src/models/Counter");
@@ -104,13 +105,17 @@ const REJECTION_REASON_SEEDS = [
   { title: "Manzil uzoq", description: "Markazgacha masofa juda uzoq" },
 ];
 
-const LEAD_INTERESTS = [
-  "Qur'on tilovati o'rganmoqchi",
-  "Bola uchun guruh izlamoqda",
-  "Arab tili kursi kerak",
+const INTEREST_SEEDS = [
   "Tajwid darslari",
-  "Hadis o'rganmoqchi",
-  "Aqida darslari",
+  "Arab tili (A1-A2)",
+  "Arab tili (B1-B2)",
+  "Qur'on tilovati",
+  "Aqida asoslari",
+  "Hadis ilmi",
+  "Fiqh darslari",
+  "Sira (Payg'ambar hayoti)",
+  "Bolalar Qur'on guruhi",
+  "Onlayn darslar",
 ];
 
 const LEAD_NOTES = [
@@ -233,6 +238,7 @@ async function main() {
     LeadSource.deleteMany({}),
     CourseType.deleteMany({}),
     RejectionReason.deleteMany({}),
+    Interest.deleteMany({}),
     Notification.deleteMany({}),
     Record.deleteMany({}),
     Counter.deleteMany({}),
@@ -665,6 +671,13 @@ async function main() {
   );
   console.log(`✅ ${rejectionReasons.length} rad etish sababi`);
 
+  // ========== INTERESTS ==========
+  console.log("Qiziqishlar yaratilmoqda...");
+  const interests = await Interest.insertMany(
+    INTEREST_SEEDS.map((name) => ({ name, createdBy: admin._id }))
+  );
+  console.log(`✅ ${interests.length} qiziqish`);
+
   // ========== LEADS ==========
   console.log(`${LEAD_COUNT} ta lead yaratilmoqda...`);
   const leadDocs = [];
@@ -687,7 +700,7 @@ async function main() {
       gender,
       age: randInt(8, 50),
       source: pick(leadSources)._id,
-      interest: pick(LEAD_INTERESTS),
+      interest: pick(interests)._id,
       uniqueLink: `BAY-${createdAt.getTime()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
       ...(Math.random() < 0.6 && {
         linkClickedAt: new Date(createdAt.getTime() + randInt(1, 48) * 3600000),

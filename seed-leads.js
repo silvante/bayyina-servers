@@ -6,10 +6,25 @@ const Lead          = require("./src/models/Lead");
 const LeadSource    = require("./src/models/LeadSource");
 const RejectionReason = require("./src/models/RejectionReason");
 const CourseType    = require("./src/models/CourseType");
+const Interest      = require("./src/models/Interest");
 const User          = require("./src/models/User");
 
 const TOTAL_LEADS = 400;
 const MONTHS_BACK = 8;
+
+// Interest names — must match Interest collection (created on first run)
+const INTEREST_SEEDS = [
+  "Tajwid darslari",
+  "Arab tili (A1-A2)",
+  "Arab tili (B1-B2)",
+  "Qur'on tilovati",
+  "Aqida asoslari",
+  "Hadis ilmi",
+  "Fiqh darslari",
+  "Sira (Payg'ambar hayoti)",
+  "Bolalar Qur'on guruhi",
+  "Onlayn darslar",
+];
 
 const FIRST_NAMES = [
   "Ali","Bekzod","Dilshod","Eldor","Fazliddin","Hasan","Ibrohim","Jasur","Kamol",
@@ -19,13 +34,6 @@ const FIRST_NAMES = [
   "Rayhona","Sevara","Tursunoy","Umida","Yulduz","Zuhra","Maftuna","Nargiza",
   "Shahzoda","Zarina","Mohira","Sabina","Munira","Sarvinoz","Gulbahor","Malika",
   "Davron","Sanjar","Sherzod","Bahodir","Muzaffar","Asror","Hamid","Farhod",
-];
-
-const INTERESTS = [
-  "Tajwid darslari","Arab tili o'rganish","Qur'on o'qishni o'rganish",
-  "Aqida asoslarini o'rganish","Hadis ilmi","Fiqh darslari",
-  "Bolam uchun qur'on darslari","Tajwid kursiga yozilmoqchi",
-  "Arab tili B1 darajasiga qadar o'rganmoqchi","Onlayn darslar bormi?",
 ];
 
 const NOTES = [
@@ -65,10 +73,17 @@ function monthWeight(monthsAgo) {
   await mongoose.connect(process.env.MONGODB_URL);
   console.log("Ulandi ✅");
 
-  const [sources, reasons, courses, managers] = await Promise.all([
+  // Upsert interests (idempotent — safe to run multiple times)
+  for (const name of INTEREST_SEEDS) {
+    await Interest.updateOne({ name }, { $setOnInsert: { name } }, { upsert: true });
+  }
+  console.log(`✅ ${INTEREST_SEEDS.length} ta qiziqish tayyor`);
+
+  const [sources, reasons, courses, interests, managers] = await Promise.all([
     LeadSource.find().lean(),
     RejectionReason.find().lean(),
     CourseType.find().lean(),
+    Interest.find().lean(),
     User.find({ role: { $in: ["admin", "teacher"] } }).select("_id").lean(),
   ]);
 
@@ -128,7 +143,7 @@ function monthWeight(monthsAgo) {
       gender,
       age:             randInt(14, 55),
       source:          sources.length ? rand(sources)._id : undefined,
-      interest:        rand(INTERESTS),
+      interest:        interests.length ? rand(interests)._id : undefined,
       courseType:      courses.length ? rand(courses)._id : undefined,
       level:           rand(["Boshlang'ich", "O'rta", "Yuqori"]),
       status,

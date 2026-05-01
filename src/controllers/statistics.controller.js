@@ -698,10 +698,26 @@ const getInterestStats = async (req, res, next) => {
       {
         $project: {
           _id: 0,
-          name: { $ifNull: ["$interestInfo.name", "Noma'lum"] },
+          // ObjectId + matched → real name; ObjectId + deleted → "O'chirilgan"; string (old data) → the string itself
+          name: {
+            $cond: {
+              if: { $gt: [{ $ifNull: ["$interestInfo", null] }, null] },
+              then: "$interestInfo.name",
+              else: {
+                $cond: {
+                  if: { $eq: [{ $type: "$_id" }, "string"] },
+                  then: "$_id",
+                  else: "O'chirilgan",
+                },
+              },
+            },
+          },
           count: 1,
         },
       },
+      // Merge duplicate names (e.g. same string interest from old data)
+      { $group: { _id: "$name", count: { $sum: "$count" } } },
+      { $project: { _id: 0, name: "$_id", count: 1 } },
       { $sort: { count: -1 } },
     ]);
 
