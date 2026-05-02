@@ -622,8 +622,8 @@ async function main() {
       if (allowedDays.has(weekdayName(cursor))) {
         const present = Math.random() < 0.85;
         // Stars: weighted so most students get 3-5 (realistic classroom scenario)
-        const stars = present
-          ? pickWeighted([1, 2, 3, 4, 5], [4, 9, 25, 37, 25])
+        const grade = present
+          ? pickWeighted([2, 3, 4, 5], [5, 20, 40, 35])
           : null;
         attendanceDocs.push({
           enrollment: en._id,
@@ -631,7 +631,7 @@ async function main() {
           student: en.student,
           date: new Date(cursor.getTime()),
           status: present ? "present" : "absent",
-          rating_stars: stars,
+          grade,
           markedBy: group.teacher,
           ...(Math.random() < 0.05 && {
             note: present ? "Vaqtida keldi" : "Kasallik bilan",
@@ -839,7 +839,7 @@ async function main() {
   console.log(`✅ ${recordDocs.length} audit yozuvi`);
 
   // ========== RATING CONFIG ==========
-  await RatingConfig.create({ attendedDayPoints: 10, starMultiplier: 2, lookbackDays: 30 });
+  await RatingConfig.create({ lookbackDays: 30 });
   console.log("✅ RatingConfig (standart sozlamalar)");
 
   console.log("\n=========================================");

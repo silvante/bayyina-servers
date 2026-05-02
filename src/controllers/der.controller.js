@@ -38,12 +38,10 @@ const getDerConfig = async (req, res, next) => {
 // PUT /attendance/der/config  (admin only)
 const updateDerConfig = async (req, res, next) => {
   try {
-    const { attendedDayPoints, starMultiplier, lookbackDays } = req.body;
+    const { lookbackDays } = req.body;
     let cfg = await RatingConfig.findOne();
     if (!cfg) cfg = new RatingConfig();
-    if (attendedDayPoints !== undefined) cfg.attendedDayPoints = attendedDayPoints;
-    if (starMultiplier    !== undefined) cfg.starMultiplier    = starMultiplier;
-    if (lookbackDays      !== undefined) cfg.lookbackDays      = lookbackDays;
+    if (lookbackDays !== undefined) cfg.lookbackDays = lookbackDays;
     await cfg.save();
     res.json({ config: cfg, message: "Sozlamalar saqlandi" });
   } catch (err) {
@@ -94,17 +92,17 @@ const getDerStats = async (req, res, next) => {
           totalPresent:  0,
           totalAbsent:   0,
           totalSessions: 0,
-          totalStars:    0,
-          starCount:     0,
+          gradeSum:      0,
+          gradeCount:    0,
         });
       }
       const s = byStudent.get(key);
       s.totalSessions++;
       if (r.status === "present") {
         s.totalPresent++;
-        if (r.rating_stars) {
-          s.totalStars += r.rating_stars;
-          s.starCount++;
+        if (r.grade) {
+          s.gradeSum  += r.grade;
+          s.gradeCount++;
         }
       } else {
         s.totalAbsent++;
@@ -112,13 +110,17 @@ const getDerStats = async (req, res, next) => {
     }
 
     const rows = Array.from(byStudent.values()).map((s) => {
-      const avgStars = s.starCount > 0 ? +(s.totalStars / s.starCount).toFixed(2) : null;
-      const score    = s.totalPresent * cfg.attendedDayPoints + s.totalStars * cfg.starMultiplier;
-      return { ...s, avgStars, score };
+      const avgGrade = s.gradeCount > 0 ? +(s.gradeSum / s.gradeCount).toFixed(2) : null;
+      return { ...s, avgGrade };
     });
 
-    // Sort by score desc and assign global rank
-    rows.sort((a, b) => b.score - a.score);
+    // Sort by avgGrade desc, nulls last
+    rows.sort((a, b) => {
+      if (a.avgGrade == null && b.avgGrade == null) return 0;
+      if (a.avgGrade == null) return 1;
+      if (b.avgGrade == null) return -1;
+      return b.avgGrade - a.avgGrade;
+    });
     rows.forEach((r, i) => { r.rankGlobal = i + 1; });
 
     // Assign rank within group
@@ -129,7 +131,12 @@ const getDerStats = async (req, res, next) => {
       byGroup.get(gid).push(r);
     }
     for (const [, groupRows] of byGroup) {
-      groupRows.sort((a, b) => b.score - a.score);
+      groupRows.sort((a, b) => {
+        if (a.avgGrade == null && b.avgGrade == null) return 0;
+        if (a.avgGrade == null) return 1;
+        if (b.avgGrade == null) return -1;
+        return b.avgGrade - a.avgGrade;
+      });
       groupRows.forEach((r, i) => { r.rankInGroup = i + 1; });
     }
 
@@ -137,7 +144,6 @@ const getDerStats = async (req, res, next) => {
       stats: rows,
       from:  fromDate,
       to:    toDate,
-      config: { attendedDayPoints: cfg.attendedDayPoints, starMultiplier: cfg.starMultiplier },
     });
   } catch (err) {
     next(err);
@@ -173,24 +179,32 @@ const getMyDerStats = async (req, res, next) => {
           groupId:       r.group,
           totalPresent:  0,
           totalSessions: 0,
-          totalStars:    0,
-          starCount:     0,
+          gradeSum:      0,
+          gradeCount:    0,
         });
       }
       const s = byStudent.get(key);
       s.totalSessions++;
       if (r.status === "present") {
         s.totalPresent++;
-        if (r.rating_stars) {
-          s.totalStars += r.rating_stars;
-          s.starCount++;
+        if (r.grade) {
+          s.gradeSum  += r.grade;
+          s.gradeCount++;
         }
       }
     }
 
-    const scoreOf = (s) => s.totalPresent * cfg.attendedDayPoints + s.totalStars * cfg.starMultiplier;
-    const allRows = Array.from(byStudent.values()).map((s) => ({ ...s, score: scoreOf(s) }));
-    allRows.sort((a, b) => b.score - a.score);
+    const gradeSort = (a, b) => {
+      if (a.avgGrade == null && b.avgGrade == null) return 0;
+      if (a.avgGrade == null) return 1;
+      if (b.avgGrade == null) return -1;
+      return b.avgGrade - a.avgGrade;
+    };
+    const allRows = Array.from(byStudent.values()).map((s) => ({
+      ...s,
+      avgGrade: s.gradeCount > 0 ? +(s.gradeSum / s.gradeCount).toFixed(2) : null,
+    }));
+    allRows.sort(gradeSort);
     allRows.forEach((r, i) => { r.rankGlobal = i + 1; });
 
     const me = allRows.find((r) => String(r.studentId) === String(req.user._id));
@@ -200,7 +214,7 @@ const getMyDerStats = async (req, res, next) => {
     for (const en of enrollments) {
       const gid = String(en.group);
       const groupRows = allRows.filter((r) => String(r.groupId) === gid);
-      groupRows.sort((a, b) => b.score - a.score);
+      groupRows.sort(gradeSort);
       const pos = groupRows.findIndex((r) => String(r.studentId) === String(req.user._id));
       groupRanks[gid] = { rank: pos + 1, total: groupRows.length };
     }
@@ -210,15 +224,14 @@ const getMyDerStats = async (req, res, next) => {
           totalPresent:  me.totalPresent,
           totalAbsent:   me.totalSessions - me.totalPresent,
           totalSessions: me.totalSessions,
-          avgStars:      me.starCount > 0 ? +(me.totalStars / me.starCount).toFixed(2) : null,
-          score:         me.score,
+          avgGrade:      me.avgGrade,
           rankGlobal:    me.rankGlobal,
           totalGlobal:   allRows.length,
           groupRanks,
         }
       : {
           totalPresent: 0, totalAbsent: 0, totalSessions: 0,
-          avgStars: null, score: 0, rankGlobal: null,
+          avgGrade: null, rankGlobal: null,
           totalGlobal: allRows.length, groupRanks,
         };
 

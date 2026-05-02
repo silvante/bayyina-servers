@@ -23,10 +23,9 @@ const Attendance = new mongoose.Schema(
       enum: ["present", "absent"],
       required: true,
     },
-    rating_stars: {
+    grade: {
       type: Number,
-      min: 1,
-      max: 5,
+      enum: [null, 2, 3, 4, 5],
       default: null,
     },
     markedBy: {

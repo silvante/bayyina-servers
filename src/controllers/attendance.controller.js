@@ -90,9 +90,9 @@ const bulkMarkAttendance = async (req, res, next) => {
           .json({ code: "invalidStatus", message: "Status noto'g'ri" });
       }
 
-      const ratingStars =
-        entry.status === "present" && entry.rating_stars >= 1 && entry.rating_stars <= 5
-          ? Math.round(entry.rating_stars)
+      const grade =
+        entry.status === "present" && [2, 3, 4, 5].includes(entry.grade)
+          ? entry.grade
           : null;
 
       ops.push({
@@ -101,7 +101,7 @@ const bulkMarkAttendance = async (req, res, next) => {
           update: {
             $set: {
               status: entry.status,
-              rating_stars: ratingStars,
+              grade,
               note: entry.note || "",
               markedBy: req.user._id,
               group: group._id,
@@ -299,7 +299,7 @@ const getSessionAttendance = async (req, res, next) => {
         enrollment:   enrollment._id,
         student:      enrollment.student,
         status:       record ? record.status        : null,
-        rating_stars: record ? record.rating_stars  : null,
+        grade:        record ? record.grade          : null,
         note:         record ? record.note          : null,
         attendanceId: record ? record._id           : null,
         markedAt:     record ? record.updatedAt     : null,
@@ -400,7 +400,7 @@ const updateAttendance = async (req, res, next) => {
         .json({ code: "notGroupTeacher", message: texts.notGroupTeacher });
     }
 
-    const { status, note, rating_stars } = req.body;
+    const { status, note, grade } = req.body;
     if (status !== undefined) {
       if (!ALLOWED_STATUSES.includes(status)) {
         return res
@@ -408,11 +408,10 @@ const updateAttendance = async (req, res, next) => {
           .json({ code: "invalidStatus", message: "Status noto'g'ri" });
       }
       attendance.status = status;
-      if (status === "absent") attendance.rating_stars = null;
+      if (status === "absent") attendance.grade = null;
     }
-    if (rating_stars !== undefined && attendance.status === "present") {
-      attendance.rating_stars =
-        rating_stars >= 1 && rating_stars <= 5 ? Math.round(rating_stars) : null;
+    if (grade !== undefined && attendance.status === "present") {
+      attendance.grade = [2, 3, 4, 5].includes(grade) ? grade : null;
     }
     if (note !== undefined) attendance.note = note;
     attendance.markedBy = req.user._id;
