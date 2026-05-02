@@ -17,6 +17,11 @@ const Enrollment = new mongoose.Schema(
       default: "active",
       enum: ["active", "completed", "dropped"],
     },
+    dropReason: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "RejectionReason",
+      default: null,
+    },
     enrolledAt: { type: Date, default: Date.now },
     discount: { type: Number, default: 0 },
     discountReason: { type: String },

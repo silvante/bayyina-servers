@@ -5,6 +5,7 @@ const recordService = require("../services/recordService");
 
 const ENROLLMENT_UPDATABLE_FIELDS = [
   "status",
+  "dropReason",
   "discount",
   "discountReason",
   "paymentDay",
@@ -143,6 +144,7 @@ const createEnrollment = async (req, res, next) => {
 const updateEnrollment = async (req, res, next) => {
   try {
     const { status, discount, discountReason, paymentDay, lastPaymentDate, nextPaymentDate, debt, balance } = req.body;
+    // dropReason handled separately below via req.body.dropReason
     const allowedStatuses = ["active", "completed", "dropped"];
 
     const updates = {};
@@ -154,6 +156,7 @@ const updateEnrollment = async (req, res, next) => {
       updates.status = status;
     }
 
+    if (req.body.dropReason !== undefined) updates.dropReason = req.body.dropReason || null;
     if (discount !== undefined) updates.discount = discount;
     if (discountReason !== undefined) updates.discountReason = discountReason;
     if (paymentDay !== undefined) updates.paymentDay = paymentDay;

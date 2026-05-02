@@ -342,6 +342,13 @@ async function main() {
   const groups = await Group.insertMany(groupDocs);
   console.log(`✅ ${groups.length} guruh`);
 
+  // ========== REJECTION REASONS (moved up — needed for dropped enrollments) ==========
+  console.log("Rad etish sabablari yaratilmoqda...");
+  const rejectionReasons = await RejectionReason.insertMany(
+    REJECTION_REASON_SEEDS.map((s) => ({ ...s, createdBy: admin._id }))
+  );
+  console.log(`✅ ${rejectionReasons.length} rad etish sababi`);
+
   // ========== ENROLLMENTS ==========
   console.log("Yozilishlar yaratilmoqda...");
   const enrollmentDocs = [];
@@ -394,6 +401,7 @@ async function main() {
         ...(nextPaymentDate && { nextPaymentDate }),
         debt,
         balance,
+        ...(status === "dropped" && { dropReason: pick(rejectionReasons)._id }),
       });
     }
   }
@@ -670,13 +678,6 @@ async function main() {
     COURSE_TYPE_SEEDS.map((s) => ({ ...s, createdBy: admin._id }))
   );
   console.log(`✅ ${courseTypes.length} kurs turi`);
-
-  // ========== REJECTION REASONS ==========
-  console.log("Rad etish sabablari yaratilmoqda...");
-  const rejectionReasons = await RejectionReason.insertMany(
-    REJECTION_REASON_SEEDS.map((s) => ({ ...s, createdBy: admin._id }))
-  );
-  console.log(`✅ ${rejectionReasons.length} rad etish sababi`);
 
   // ========== INTERESTS ==========
   console.log("Qiziqishlar yaratilmoqda...");
