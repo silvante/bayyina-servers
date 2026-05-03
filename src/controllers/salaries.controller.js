@@ -6,6 +6,7 @@ const {
   buildPaginationMeta,
 } = require("../utils/helpers");
 const Salary = require("../models/Salary");
+const SalaryAdvance = require("../models/SalaryAdvance");
 const Group = require("../models/Group");
 const Enrollment = require("../models/Enrollment");
 const Payment = require("../models/Payment");
@@ -299,14 +300,36 @@ const generateSalaries = async (req, res, next) => {
         continue;
       }
 
+      // Sum confirmed advances covering this month
+      const advances = await SalaryAdvance.find({
+        teacher: t._id,
+        status: "confirmed",
+        coveredMonths: monthStart,
+      });
+      const advanceDeducted = round(
+        advances.reduce((sum, a) => sum + (a.months > 0 ? a.amount / a.months : a.amount), 0),
+      );
+      // Also check partial advance for this salary month
+      const partialAdvances = await SalaryAdvance.find({
+        teacher: t._id,
+        type: "partial",
+        status: "confirmed",
+        salaryMonth: monthStart,
+      });
+      const partialDeducted = round(partialAdvances.reduce((sum, a) => sum + a.amount, 0));
+      const totalAdvanceDeducted = round(advanceDeducted + partialDeducted);
+
+      const bonus     = existing?.bonus     || 0;
+      const deduction = existing?.deduction || 0;
       const payload = {
         teacher: t._id,
         month: monthStart,
         groups: computed.groups,
         totalAmount: computed.totalAmount,
-        bonus: existing?.bonus || 0,
-        deduction: existing?.deduction || 0,
-        netAmount: computed.totalAmount + (existing?.bonus || 0) - (existing?.deduction || 0),
+        bonus,
+        deduction,
+        advanceDeducted: totalAdvanceDeducted,
+        netAmount: round(computed.totalAmount + bonus - deduction - totalAdvanceDeducted),
         status: existing?.status === "paid" ? "paid" : "pending",
         createdBy: req.user._id,
       };

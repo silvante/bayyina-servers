@@ -123,6 +123,22 @@ const texts = {
   notATeacher: "Foydalanuvchi o'qituvchi emas",
   invalidMonth: "Oy noto'g'ri kiritildi",
 
+  // Deductions
+  deductionCreated: "Ushlab qolish yaratildi",
+  deductionConfirmed: "Ushlab qolish tasdiqlandi va oylikdan ayirildi",
+  deductionDeleted: "Ushlab qolish o'chirildi",
+  deductionNotFound: "Ushlab qolish topilmadi",
+  deductionsFound: "Ushlab qolishlar ro'yxati olindi",
+  alreadyConfirmed: "Bu yozuv allaqachon tasdiqlangan",
+
+  // Advances
+  advanceCreated: "Avans yaratildi",
+  advanceConfirmed: "Avans tasdiqlandi",
+  advanceDeleted: "Avans o'chirildi",
+  advanceNotFound: "Avans topilmadi",
+  advancesFound: "Avanslar ro'yxati olindi",
+  advanceExists: "Bu o'qituvchi uchun allaqachon faol avans mavjud",
+
   // General
   serverError: "Serverda ichki xatolik",
   tooManyRequests: "Juda ko'p so'rovlar. Iltimos, 3 daqiqadan keyin urinib ko'ring",

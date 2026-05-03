@@ -31,6 +31,7 @@ const Salary = new mongoose.Schema(
     bonus: { type: Number, default: 0 },
     deduction: { type: Number, default: 0 },
     netAmount: { type: Number, default: 0 },
+    advanceDeducted: { type: Number, default: 0 },
     status: {
       type: String,
       enum: ["pending", "paid"],
