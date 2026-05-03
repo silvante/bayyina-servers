@@ -14,6 +14,8 @@ require("../models/Group");
 require("../models/Enrollment");
 require("../models/Payment");
 require("../models/Salary");
+require("../models/SalaryDeduction");
+require("../models/SalaryAdvance");
 require("../models/VerificationCode");
 
 const app = express();

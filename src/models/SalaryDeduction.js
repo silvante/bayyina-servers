@@ -8,6 +8,7 @@ const SalaryDeduction = new mongoose.Schema(
     date:    { type: Date, required: true },
     month:   { type: Date, required: true }, // first day of the month to deduct from
     status:  { type: String, enum: ["pending", "confirmed"], default: "pending" },
+    teacherName: { type: String },
     salary:  { type: mongoose.Schema.Types.ObjectId, ref: "Salary" },
     confirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     confirmedAt: { type: Date },

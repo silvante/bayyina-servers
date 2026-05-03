@@ -95,6 +95,7 @@ const createAdvance = async (req, res, next) => {
 
       const advance = await SalaryAdvance.create({
         teacher,
+        teacherName: [teacherDoc.firstName, teacherDoc.lastName].filter(Boolean).join(" "),
         type: "advance",
         months: numMonths,
         amount: round(Number(amount)),
@@ -120,6 +121,7 @@ const createAdvance = async (req, res, next) => {
 
     const advance = await SalaryAdvance.create({
       teacher,
+      teacherName: [teacherDoc.firstName, teacherDoc.lastName].filter(Boolean).join(" "),
       type: "partial",
       months: 0,
       amount: round(Number(amount)),
@@ -168,6 +170,7 @@ const requestPartialAdvance = async (req, res, next) => {
 
     const advance = await SalaryAdvance.create({
       teacher,
+      teacherName: [req.user.firstName, req.user.lastName].filter(Boolean).join(" "),
       type: "partial",
       months: 0,
       amount: round(Number(amount)),

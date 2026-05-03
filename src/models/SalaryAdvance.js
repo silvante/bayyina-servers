@@ -11,6 +11,7 @@ const SalaryAdvance = new mongoose.Schema(
     note:    { type: String },
     date:    { type: Date, required: true },
     status:  { type: String, enum: ["pending", "confirmed", "settled"], default: "pending" },
+    teacherName: { type: String },
     // months this advance covers (first-day-of-month dates, advance type)
     coveredMonths: [{ type: Date }],
     // for partial type: which salary month this is drawn from

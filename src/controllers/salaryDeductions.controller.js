@@ -75,6 +75,7 @@ const createDeduction = async (req, res, next) => {
 
     const deduction = await SalaryDeduction.create({
       teacher,
+      teacherName: [teacherDoc.firstName, teacherDoc.lastName].filter(Boolean).join(" "),
       amount: round(Number(amount)),
       reason: reason.trim(),
       date: new Date(date),
