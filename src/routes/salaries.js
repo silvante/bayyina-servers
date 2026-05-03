@@ -9,6 +9,7 @@ const {
   createSalary,
   updateSalary,
   paySalary,
+  bulkPay,
   deleteSalary,
 } = require("../controllers/salaries.controller");
 const { auth, roleCheck } = require("../middlewares/auth");
@@ -27,6 +28,13 @@ router.get("/calculate", auth, roleCheck(["admin"]), calculateSalary);
  * Access: admin only
  */
 router.post("/generate", auth, roleCheck(["admin"]), generateSalaries);
+
+/**
+ * POST /salaries/bulk-pay
+ * Mark multiple salary records as paid.
+ * Access: admin only
+ */
+router.post("/bulk-pay", auth, roleCheck(["admin"]), bulkPay);
 
 /**
  * GET /salaries

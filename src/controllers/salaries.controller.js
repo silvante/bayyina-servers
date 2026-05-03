@@ -507,7 +507,7 @@ const updateSalary = async (req, res, next) => {
   }
 };
 
-// POST /salaries/:id/pay — convenience to mark as paid
+// POST /salaries/:id/pay — convenience to mark as paid (optional body: { amount })
 const paySalary = async (req, res, next) => {
   try {
     const existing = await Salary.findById(req.params.id);
@@ -525,9 +525,14 @@ const paySalary = async (req, res, next) => {
       });
     }
 
+    const updatePayload = { status: "paid", paidAt: new Date() };
+    if (req.body?.amount != null && req.body.amount !== "") {
+      updatePayload.netAmount = round(Number(req.body.amount));
+    }
+
     const salary = await Salary.findByIdAndUpdate(
       req.params.id,
-      { status: "paid", paidAt: new Date() },
+      updatePayload,
       { new: true },
     ).populate({ path: "teacher", select: "firstName lastName phone" });
 
@@ -546,6 +551,52 @@ const paySalary = async (req, res, next) => {
       salary,
       code: "salaryPaid",
       message: texts.salaryPaid,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /salaries/bulk-pay — mark multiple salaries as paid
+const bulkPay = async (req, res, next) => {
+  try {
+    const { ids } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res
+        .status(400)
+        .json({ code: "missingField", message: "IDs kiritilishi shart" });
+    }
+
+    const validIds = ids.filter((id) => mongoose.Types.ObjectId.isValid(id));
+    let paid = 0;
+
+    for (const id of validIds) {
+      const existing = await Salary.findById(id);
+      if (!existing || existing.status === "paid") continue;
+
+      const salary = await Salary.findByIdAndUpdate(
+        id,
+        { status: "paid", paidAt: new Date() },
+        { new: true },
+      ).populate({ path: "teacher", select: "firstName lastName phone" });
+
+      await recordService.createRecord({
+        eventType: "SALARY_PAID",
+        entityType: "Salary",
+        entityId: salary._id,
+        entity: salary,
+        actor: recordService.actorFromReq(req),
+        refs: { teacherId: existing.teacher, salaryId: salary._id },
+        metadata: { teacher: salary.teacher },
+      });
+
+      paid++;
+    }
+
+    res.json({
+      paid,
+      code: "salaryPaid",
+      message: `${paid} ta oylik to'landi`,
     });
   } catch (err) {
     next(err);
@@ -588,5 +639,6 @@ module.exports = {
   createSalary,
   updateSalary,
   paySalary,
+  bulkPay,
   deleteSalary,
 };
