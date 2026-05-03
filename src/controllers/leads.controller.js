@@ -15,6 +15,7 @@ const ALLOWED_GENDERS = ["male", "female"];
 
 const UPDATABLE_FIELDS = [
   "firstName",
+  "lastName",
   "phone",
   "telegramId",
   "gender",
@@ -63,7 +64,7 @@ const getLeads = async (req, res, next) => {
       const term = String(req.query.search).trim();
       if (term) {
         const regex = new RegExp("^" + term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-        const orClauses = [{ firstName: regex }];
+        const orClauses = [{ firstName: regex }, { lastName: regex }];
         const asNumber = Number(term);
         if (!Number.isNaN(asNumber)) orClauses.push({ phone: asNumber });
         filter.$or = orClauses;

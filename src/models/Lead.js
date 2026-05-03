@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const Lead = new mongoose.Schema(
   {
     firstName: { type: String, required: true, trim: true },
+    lastName:  { type: String, trim: true },
     phone: { type: Number },
     telegramId: { type: String, unique: true, sparse: true },
     gender: { type: String, enum: ["male", "female"] },

@@ -36,6 +36,17 @@ const FIRST_NAMES = [
   "Davron","Sanjar","Sherzod","Bahodir","Muzaffar","Asror","Hamid","Farhod",
 ];
 
+const LAST_NAMES = [
+  "Karimov","Rahimov","Usmonov","Toshmatov","Xoliqov","Mirzayev","Qodirov","Ergashev",
+  "Nazarov","Yusupov","Ismoilov","Sotvoldiyev","Hamidov","Raximov","Normatov","Sultonov",
+  "Hasanov","Mamatov","Abdullayev","Jumayev","Botirov","Holiqov","Turayev","Valiyev",
+  "Xasanov","Qosimov","Alimov","Sobirov","Razzaqov","Boymurodov","Tillayev","Yunusov",
+  "Askarov","Zokirov","Qurbonov","Ortiqov","Holmatov","Tursunov","Muhammadiyev","Tojiboyev",
+  "Karimova","Rahimova","Usmonova","Toshmatova","Xoliqova","Mirzayeva","Qodirova","Ergasheva",
+  "Nazarova","Yusupova","Ismoilova","Hamidova","Raxmanova","Normatova","Sultonova","Hasanova",
+  "Mamatova","Abdullayeva","Jumayeva","Botirova","Holiqova","Turayeva","Valiyeva","Xasanova",
+];
+
 const NOTES = [
   "Qiziqishi yuqori","Ertaga qayta qo'ng'iroq qilish kerak",
   "Narx haqida so'radi","Vaqti cheklangan, kechki guruh izlaydi",
@@ -139,6 +150,7 @@ function monthWeight(monthsAgo) {
 
     leads.push({
       firstName:       rand(FIRST_NAMES),
+      lastName:        rand(LAST_NAMES),
       phone:           phoneBase + i,
       gender,
       age:             randInt(14, 55),
