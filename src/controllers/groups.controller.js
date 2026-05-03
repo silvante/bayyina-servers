@@ -1,3 +1,4 @@
+const axios = require("axios");
 const texts = require("../data/texts");
 const { pickAllowedFields, getPagination, buildPaginationMeta, buildSearchRegex } = require("../utils/helpers");
 const Group = require("../models/Group");
@@ -289,4 +290,67 @@ const searchGroups = async (req, res, next) => {
   }
 };
 
-module.exports = { getGroups, getGroup, createGroup, updateGroup, deleteGroup, searchGroups };
+// POST /groups/:id/send-message — admin (any group) or teacher (own group)
+const sendGroupMessage = async (req, res, next) => {
+  const { message } = req.body;
+
+  if (!message || !String(message).trim()) {
+    return res.status(400).json({ code: "missingField", message: "Xabar matni kiritilishi shart" });
+  }
+
+  const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || process.env.MAIN_BOT_TOKEN;
+  if (!BOT_TOKEN) {
+    return res.status(500).json({ code: "botTokenMissing", message: "BOT_TOKEN sozlanmagan" });
+  }
+
+  try {
+    const group = await Group.findById(req.params.id).select("teacher");
+    if (!group) {
+      return res.status(404).json({ code: "groupNotFound", message: texts.groupNotFound });
+    }
+
+    if (req.user.role === "teacher" && String(group.teacher) !== String(req.user._id)) {
+      return res.status(403).json({ code: "forbidden", message: texts.forbidden });
+    }
+
+    const enrollments = await Enrollment.find({ group: group._id, status: "active" })
+      .populate({ path: "student", select: "telegramId" });
+
+    const ids = enrollments
+      .map((e) => e.student?.telegramId)
+      .filter((id) => id && String(id).trim() !== "");
+
+    if (ids.length === 0) {
+      return res.status(400).json({ code: "noRecipients", message: "Telegram ID bog'langan o'quvchilar topilmadi" });
+    }
+
+    const text = String(message).trim();
+    let sent = 0;
+    let failed = 0;
+
+    for (const chatId of ids) {
+      try {
+        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+          chat_id: chatId,
+          text,
+          parse_mode: "HTML",
+        });
+        sent++;
+      } catch {
+        failed++;
+      }
+    }
+
+    res.json({
+      sent,
+      failed,
+      total: ids.length,
+      code: "messagesSent",
+      message: `${sent} ta xabar yuborildi`,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getGroups, getGroup, createGroup, updateGroup, deleteGroup, searchGroups, sendGroupMessage };

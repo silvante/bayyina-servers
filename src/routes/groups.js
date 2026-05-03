@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const { getGroups, getGroup, createGroup, updateGroup, deleteGroup, searchGroups } = require("../controllers/groups.controller");
+const { getGroups, getGroup, createGroup, updateGroup, deleteGroup, searchGroups, sendGroupMessage } = require("../controllers/groups.controller");
 const { auth, roleCheck } = require("../middlewares/auth");
 const validateId = require("../middlewares/validateId");
 
@@ -40,5 +40,11 @@ router.put("/:id", auth, roleCheck(["admin"]), validateId("id"), updateGroup);
  * Access: admin only
  */
 router.delete("/:id", auth, roleCheck(["admin"]), validateId("id"), deleteGroup);
+
+/**
+ * POST /groups/:id/send-message
+ * Access: admin (any), teacher (own)
+ */
+router.post("/:id/send-message", auth, roleCheck(["admin", "teacher"]), validateId("id"), sendGroupMessage);
 
 module.exports = router;
