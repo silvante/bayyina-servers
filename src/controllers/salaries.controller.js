@@ -7,6 +7,7 @@ const {
 } = require("../utils/helpers");
 const Salary = require("../models/Salary");
 const SalaryAdvance = require("../models/SalaryAdvance");
+const SalaryDeduction = require("../models/SalaryDeduction");
 const Group = require("../models/Group");
 const Enrollment = require("../models/Enrollment");
 const Payment = require("../models/Payment");
@@ -319,8 +320,19 @@ const generateSalaries = async (req, res, next) => {
       const partialDeducted = round(partialAdvances.reduce((sum, a) => sum + a.amount, 0));
       const totalAdvanceDeducted = round(advanceDeducted + partialDeducted);
 
+      // Confirmed deductions for this month (salary not yet linked)
+      const confirmedDeductions = await SalaryDeduction.find({
+        teacher: t._id,
+        status: "confirmed",
+        month: monthStart,
+        salary: { $exists: false },
+      });
+      const deductionFromRecords = round(
+        confirmedDeductions.reduce((sum, d) => sum + d.amount, 0),
+      );
+
       const bonus     = existing?.bonus     || 0;
-      const deduction = existing?.deduction || 0;
+      const deduction = round((existing?.deduction || 0) + deductionFromRecords);
       const payload = {
         teacher: t._id,
         month: monthStart,
@@ -339,6 +351,14 @@ const generateSalaries = async (req, res, next) => {
         salary = await Salary.findByIdAndUpdate(existing._id, payload, { new: true });
       } else {
         salary = await Salary.create(payload);
+      }
+
+      // Link previously unlinked confirmed deductions to this salary
+      if (confirmedDeductions.length) {
+        await SalaryDeduction.updateMany(
+          { _id: { $in: confirmedDeductions.map((d) => d._id) } },
+          { salary: salary._id },
+        );
       }
 
       await recordService.createRecord({
@@ -471,7 +491,7 @@ const updateSalary = async (req, res, next) => {
         ? Number(updates.deduction)
         : existing.deduction;
     updates.netAmount = round(
-      (existing.totalAmount || 0) + (bonus || 0) - (deduction || 0),
+      (existing.totalAmount || 0) + (bonus || 0) - (deduction || 0) - (existing.advanceDeducted || 0),
     );
 
     const salary = await Salary.findByIdAndUpdate(req.params.id, updates, {

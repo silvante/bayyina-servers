@@ -104,31 +104,25 @@ const confirmDeduction = async (req, res, next) => {
       return res.status(400).json({ code: "alreadyConfirmed", message: texts.alreadyConfirmed });
     }
 
-    // Find salary for teacher + month
+    // Find salary for teacher + month (optional — if not yet generated, still confirm)
     const salary = await Salary.findOne({ teacher: deduction.teacher, month: deduction.month });
-    if (!salary) {
-      return res.status(404).json({
-        code: "salaryNotFound",
-        message: "Bu oy uchun oylik hisobi topilmadi. Avval oylikni hisoblang.",
-      });
+
+    const updatePayload = {
+      status: "confirmed",
+      confirmedBy: req.user._id,
+      confirmedAt: new Date(),
+    };
+
+    if (salary) {
+      const newDeduction = round((salary.deduction || 0) + deduction.amount);
+      const newNet = round((salary.totalAmount || 0) + (salary.bonus || 0) - newDeduction - (salary.advanceDeducted || 0));
+      await Salary.findByIdAndUpdate(salary._id, { deduction: newDeduction, netAmount: newNet });
+      updatePayload.salary = salary._id;
     }
-
-    const newDeduction = round((salary.deduction || 0) + deduction.amount);
-    const newNet = round((salary.totalAmount || 0) + (salary.bonus || 0) - newDeduction - (salary.advanceDeducted || 0));
-
-    await Salary.findByIdAndUpdate(salary._id, {
-      deduction: newDeduction,
-      netAmount: newNet,
-    });
 
     const confirmed = await SalaryDeduction.findByIdAndUpdate(
       deduction._id,
-      {
-        status: "confirmed",
-        salary: salary._id,
-        confirmedBy: req.user._id,
-        confirmedAt: new Date(),
-      },
+      updatePayload,
       { new: true },
     ).populate({ path: "teacher", select: "firstName lastName" });
 
