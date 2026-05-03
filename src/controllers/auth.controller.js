@@ -126,18 +126,29 @@ const profile = async (req, res, next) => {
   }
 };
 
-// Link Telegram ID to the current user
+// Link Telegram ID to the current user.
+// "Last login wins": unlink this telegramId from any other user first,
+// so only the most recently logged-in account receives messages.
 const linkTelegram = async (req, res, next) => {
   const { telegramId } = req.body;
   if (!telegramId) {
     return res.status(400).json({ code: 'missingField', message: 'telegramId kiritilishi shart' });
   }
   try {
+    const tgId = String(telegramId);
+
+    // Remove this telegramId from any other user (handles shared-device / multi-account case)
+    await User.updateMany(
+      { _id: { $ne: req.user._id }, telegramId: tgId },
+      { $unset: { telegramId: '' } },
+    );
+
     const user = await User.findByIdAndUpdate(
       req.user._id,
-      { telegramId: String(telegramId) },
-      { new: true }
+      { telegramId: tgId },
+      { new: true },
     ).select('-password');
+
     res.json({ user, code: 'telegramLinked', message: 'Telegram ID saqlandi' });
   } catch (err) {
     next(err);
