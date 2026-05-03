@@ -1,6 +1,6 @@
-const axios = require("axios");
 const texts = require("../data/texts");
 const { pickAllowedFields, getPagination, buildPaginationMeta, buildSearchRegex } = require("../utils/helpers");
+const { sendBulk, getTokens } = require("../utils/telegram");
 const Group = require("../models/Group");
 const Enrollment = require("../models/Enrollment");
 const User = require("../models/User");
@@ -298,8 +298,7 @@ const sendGroupMessage = async (req, res, next) => {
     return res.status(400).json({ code: "missingField", message: "Xabar matni kiritilishi shart" });
   }
 
-  const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || process.env.MAIN_BOT_TOKEN;
-  if (!BOT_TOKEN) {
+  if (!getTokens("admin")[0]) {
     return res.status(500).json({ code: "botTokenMissing", message: "BOT_TOKEN sozlanmagan" });
   }
 
@@ -316,37 +315,20 @@ const sendGroupMessage = async (req, res, next) => {
     const enrollments = await Enrollment.find({ group: group._id, status: "active" })
       .populate({ path: "student", select: "telegramId" });
 
-    const ids = enrollments
-      .map((e) => e.student?.telegramId)
-      .filter((id) => id && String(id).trim() !== "");
+    const recipients = enrollments
+      .filter((e) => e.student?.telegramId && String(e.student.telegramId).trim() !== "")
+      .map((e) => ({ chatId: e.student.telegramId, role: "student" }));
 
-    if (ids.length === 0) {
+    if (recipients.length === 0) {
       return res.status(400).json({ code: "noRecipients", message: "Telegram ID bog'langan o'quvchilar topilmadi" });
     }
 
-    const text = String(message).trim();
-    let sent = 0;
-    let failed = 0;
-
-    for (const chatId of ids) {
-      try {
-        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-          chat_id: chatId,
-          text,
-          parse_mode: "HTML",
-        });
-        sent++;
-      } catch {
-        failed++;
-      }
-    }
+    const result = await sendBulk(recipients, String(message).trim());
 
     res.json({
-      sent,
-      failed,
-      total: ids.length,
+      ...result,
       code: "messagesSent",
-      message: `${sent} ta xabar yuborildi`,
+      message: `${result.sent} ta xabar yuborildi`,
     });
   } catch (err) {
     next(err);

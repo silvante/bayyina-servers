@@ -1,5 +1,5 @@
-const axios = require('axios');
 const User = require('../models/User');
+const { sendBulk, getTokens } = require('../utils/telegram');
 
 // POST /telegram/send — admin only
 const sendMessage = async (req, res, next) => {
@@ -9,51 +9,37 @@ const sendMessage = async (req, res, next) => {
     return res.status(400).json({ code: 'missingField', message: 'Xabar matni kiritilishi shart' });
   }
 
-  const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || process.env.MAIN_BOT_TOKEN;
-  if (!BOT_TOKEN) {
+  const mainToken = getTokens('admin')[0];
+  if (!mainToken) {
     return res.status(500).json({ code: 'botTokenMissing', message: 'BOT_TOKEN sozlanmagan' });
   }
 
   try {
-    let ids = [];
+    let recipients = [];
 
     if (Array.isArray(telegramIds) && telegramIds.length > 0) {
-      ids = telegramIds.map(String);
+      recipients = telegramIds.map((id) => ({ chatId: String(id), role: 'unknown' }));
     } else {
       const filter = { telegramId: { $exists: true, $ne: null, $ne: '' } };
       if (target === 'students') filter.role = 'student';
       else if (target === 'teachers') filter.role = 'teacher';
 
-      const users = await User.find(filter).select('telegramId');
-      ids = users.map((u) => u.telegramId).filter(Boolean);
+      const users = await User.find(filter).select('telegramId role');
+      recipients = users
+        .filter((u) => u.telegramId)
+        .map((u) => ({ chatId: u.telegramId, role: u.role }));
     }
 
-    if (ids.length === 0) {
+    if (recipients.length === 0) {
       return res.status(400).json({ code: 'noRecipients', message: "Telegram ID bog'langan foydalanuvchilar topilmadi" });
     }
 
-    let sent = 0;
-    let failed = 0;
-
-    for (const chatId of ids) {
-      try {
-        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-          chat_id: chatId,
-          text: message.trim(),
-          parse_mode: 'HTML',
-        });
-        sent++;
-      } catch {
-        failed++;
-      }
-    }
+    const result = await sendBulk(recipients, message.trim());
 
     res.json({
-      sent,
-      failed,
-      total: ids.length,
+      ...result,
       code: 'messagesSent',
-      message: `${sent} ta xabar yuborildi`,
+      message: `${result.sent} ta xabar yuborildi`,
     });
   } catch (err) {
     next(err);
