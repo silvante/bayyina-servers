@@ -2198,6 +2198,26 @@ components:
         type: string
         example: "664f1a2b3c4d5e6f7a8b9c20"
 
+    startDate:
+      name: startDate
+      in: query
+      required: false
+      description: Filter start date (inclusive). Format `YYYY-MM-DD`. Parsed as UTC midnight.
+      schema:
+        type: string
+        format: date
+        example: "2026-01-01"
+
+    endDate:
+      name: endDate
+      in: query
+      required: false
+      description: Filter end date (inclusive). Format `YYYY-MM-DD`. Parsed as UTC end-of-day.
+      schema:
+        type: string
+        format: date
+        example: "2026-04-30"
+
   # ─────────────────────────────────────────────
   # Reusable responses
   # ─────────────────────────────────────────────
