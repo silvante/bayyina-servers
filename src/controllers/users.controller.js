@@ -97,10 +97,10 @@ const createUser = async (req, res, next) => {
     source,
   } = req.body;
 
-  if (!firstName || !lastName) {
+  if (!firstName || !String(firstName).trim()) {
     return res.status(400).json({
       code: "missingField",
-      message: "Ism va Familiya kiritilishi shart",
+      message: "Ism kiritilishi shart",
     });
   }
 

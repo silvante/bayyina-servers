@@ -116,6 +116,15 @@ const createLead = async (req, res, next) => {
 
   const payload = pickAllowedFields(req.body, UPDATABLE_FIELDS);
 
+  if (payload.phone !== undefined) {
+    const cleaned = String(payload.phone).replace(/\D/g, "");
+    if (cleaned) {
+      payload.phone = Number(cleaned);
+    } else {
+      delete payload.phone;
+    }
+  }
+
   if (payload.status && !ALLOWED_STATUSES.includes(payload.status)) {
     return res.status(400).json({ code: "invalidLeadStatus", message: texts.invalidLeadStatus });
   }
@@ -162,6 +171,15 @@ const createLead = async (req, res, next) => {
 const updateLead = async (req, res, next) => {
   try {
     const updates = pickAllowedFields(req.body, UPDATABLE_FIELDS);
+
+    if (updates.phone !== undefined) {
+      const cleaned = String(updates.phone).replace(/\D/g, "");
+      if (cleaned) {
+        updates.phone = Number(cleaned);
+      } else {
+        delete updates.phone;
+      }
+    }
 
     if (updates.status && !ALLOWED_STATUSES.includes(updates.status)) {
       return res.status(400).json({ code: "invalidLeadStatus", message: texts.invalidLeadStatus });
