@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const { getGroups, getGroup, createGroup, updateGroup, deleteGroup, searchGroups, sendGroupMessage } = require("../controllers/groups.controller");
+const { getGroups, getGroup, createGroup, updateGroup, deleteGroup, searchGroups, sendGroupMessage, toggleGroupActive } = require("../controllers/groups.controller");
 const { auth, roleCheck } = require("../middlewares/auth");
 const validateId = require("../middlewares/validateId");
 
@@ -40,6 +40,12 @@ router.put("/:id", auth, roleCheck(["admin"]), validateId("id"), updateGroup);
  * Access: admin only
  */
 router.delete("/:id", auth, roleCheck(["admin"]), validateId("id"), deleteGroup);
+
+/**
+ * PATCH /groups/:id/toggle-active
+ * Access: admin only
+ */
+router.patch("/:id/toggle-active", auth, roleCheck(["admin"]), validateId("id"), toggleGroupActive);
 
 /**
  * POST /groups/:id/send-message

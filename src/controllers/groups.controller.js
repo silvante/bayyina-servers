@@ -6,7 +6,7 @@ const Enrollment = require("../models/Enrollment");
 const User = require("../models/User");
 const recordService = require("../services/recordService");
 
-const GROUP_UPDATABLE_FIELDS = ["name", "description", "price", "teacher", "schedule", "room", "salaryOverride", "salaryType", "salaryValue", "minSalary", "showPaymentsToTeacher"];
+const GROUP_UPDATABLE_FIELDS = ["name", "description", "price", "teacher", "schedule", "room", "salaryOverride", "salaryType", "salaryValue", "minSalary", "showPaymentsToTeacher", "isActive"];
 
 // GET /groups
 const getGroups = async (req, res, next) => {
@@ -18,6 +18,9 @@ const getGroups = async (req, res, next) => {
     if (req.user.role === "teacher") {
       filter.teacher = req.user._id;
     }
+
+    if (req.query.isActive === "true")  filter.isActive = true;
+    if (req.query.isActive === "false") filter.isActive = { $ne: true };
 
     const [groups, total] = await Promise.all([
       Group.find(filter)
@@ -178,6 +181,21 @@ const updateGroup = async (req, res, next) => {
   }
 };
 
+// PATCH /groups/:id/toggle-active — admin only
+const toggleGroupActive = async (req, res, next) => {
+  try {
+    const group = await Group.findById(req.params.id);
+    if (!group) {
+      return res.status(404).json({ code: "groupNotFound", message: texts.groupNotFound });
+    }
+    group.isActive = !group.isActive;
+    await group.save();
+    res.json({ group, code: "groupUpdated", message: texts.groupUpdated });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // DELETE /groups/:id — admin only
 const deleteGroup = async (req, res, next) => {
   try {
@@ -217,6 +235,9 @@ const searchGroups = async (req, res, next) => {
     } else if (req.query.teacher) {
       filter.teacher = req.query.teacher;
     }
+
+    if (req.query.isActive === "true")  filter.isActive = true;
+    if (req.query.isActive === "false") filter.isActive = { $ne: true };
 
     if (req.query.room) filter.room = buildSearchRegex(req.query.room);
     if (req.query.day) filter["schedule.days"] = req.query.day;
@@ -335,4 +356,4 @@ const sendGroupMessage = async (req, res, next) => {
   }
 };
 
-module.exports = { getGroups, getGroup, createGroup, updateGroup, deleteGroup, searchGroups, sendGroupMessage };
+module.exports = { getGroups, getGroup, createGroup, updateGroup, deleteGroup, searchGroups, sendGroupMessage, toggleGroupActive };
