@@ -7,6 +7,15 @@ const Attendance = require("../models/Attendance");
 const Salary = require("../models/Salary");
 const SalaryAdvance = require("../models/SalaryAdvance");
 const SalaryDeduction = require("../models/SalaryDeduction");
+const Record = require("../models/Record");
+
+const LEAD_EVENT_TYPES = [
+  "LEAD_CREATED",
+  "LEAD_UPDATED",
+  "LEAD_STATUS_CHANGED",
+  "LEAD_DELETED",
+  "LEAD_LINK_CLICKED",
+];
 
 function parseDateRange(query, field = "createdAt") {
   const filter = {};
@@ -94,7 +103,7 @@ const getLeadStats = async (req, res, next) => {
     const baseMatch = Object.keys(dateFilter).length ? dateFilter : {};
     const trendStart = last6MonthsStart();
 
-    const [byStatus, bySource, byGender, byRejectionReason, monthlyTrend] = await Promise.all([
+    const [byStatus, bySource, byGender, byRejectionReason, monthlyTrend, byAgeGroup, byCourseType] = await Promise.all([
       Lead.aggregate([
         { $match: baseMatch },
         { $group: { _id: "$status", count: { $sum: 1 } } },
@@ -182,6 +191,49 @@ const getLeadStats = async (req, res, next) => {
           },
         },
       ]),
+
+      Lead.aggregate([
+        { $match: { ...baseMatch, age: { $exists: true, $ne: null, $gt: 0 } } },
+        {
+          $addFields: {
+            ageGroup: {
+              $switch: {
+                branches: [
+                  { case: { $lte: ["$age", 18] }, then: "10-18" },
+                  { case: { $lte: ["$age", 25] }, then: "18-25" },
+                  { case: { $lte: ["$age", 35] }, then: "25-35" },
+                ],
+                default: "35+",
+              },
+            },
+          },
+        },
+        { $group: { _id: "$ageGroup", count: { $sum: 1 } } },
+        { $project: { _id: 0, ageGroup: "$_id", count: 1 } },
+      ]),
+
+      Lead.aggregate([
+        { $match: { ...baseMatch, courseType: { $exists: true, $ne: null } } },
+        { $group: { _id: "$courseType", count: { $sum: 1 } } },
+        {
+          $lookup: {
+            from: "coursetypes",
+            localField: "_id",
+            foreignField: "_id",
+            as: "info",
+          },
+        },
+        { $unwind: { path: "$info", preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            _id: 0,
+            course: { $ifNull: ["$info.name", "Noma'lum"] },
+            count: 1,
+          },
+        },
+        { $sort: { count: -1 } },
+        { $limit: 12 },
+      ]),
     ]);
 
     const totalLeads = byStatus.reduce((s, r) => s + r.count, 0);
@@ -189,6 +241,10 @@ const getLeadStats = async (req, res, next) => {
       byStatus.find((r) => r.status === "converted")?.count ?? 0;
     const conversionRate =
       totalLeads > 0 ? Math.round((convertedCount / totalLeads) * 100) : 0;
+
+    const AGE_GROUP_ORDER = ["10-18", "18-25", "25-35", "35+"];
+    const ageGroupMap = Object.fromEntries(byAgeGroup.map((r) => [r.ageGroup, r.count]));
+    const byAgeGroupOrdered = AGE_GROUP_ORDER.map((g) => ({ ageGroup: g, count: ageGroupMap[g] ?? 0 }));
 
     res.json({
       success: true,
@@ -200,6 +256,8 @@ const getLeadStats = async (req, res, next) => {
         byGender,
         byRejectionReason,
         monthlyTrend,
+        byAgeGroup: byAgeGroupOrdered,
+        byCourseType,
       },
     });
   } catch (err) {
@@ -730,6 +788,72 @@ const getInterestStats = async (req, res, next) => {
   }
 };
 
+const getLeadActivityStats = async (req, res, next) => {
+  try {
+    const days = Math.min(parseInt(req.query.days) || 30, 90);
+    const since = new Date();
+    since.setUTCDate(since.getUTCDate() - days + 1);
+    since.setUTCHours(0, 0, 0, 0);
+
+    const [dailyActivity, byEventType, statusTransitions] = await Promise.all([
+      Record.aggregate([
+        { $match: { eventType: { $in: LEAD_EVENT_TYPES }, createdAt: { $gte: since } } },
+        {
+          $group: {
+            _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { _id: 1 } },
+        { $project: { _id: 0, date: "$_id", count: 1 } },
+      ]),
+
+      Record.aggregate([
+        { $match: { eventType: { $in: LEAD_EVENT_TYPES }, createdAt: { $gte: since } } },
+        { $group: { _id: "$eventType", count: { $sum: 1 } } },
+        { $project: { _id: 0, eventType: "$_id", count: 1 } },
+        { $sort: { count: -1 } },
+      ]),
+
+      Record.aggregate([
+        {
+          $match: {
+            eventType: "LEAD_STATUS_CHANGED",
+            "metadata.from": { $exists: true, $ne: null },
+            "metadata.to":   { $exists: true, $ne: null },
+          },
+        },
+        {
+          $group: {
+            _id: { from: "$metadata.from", to: "$metadata.to" },
+            count: { $sum: 1 },
+          },
+        },
+        { $project: { _id: 0, from: "$_id.from", to: "$_id.to", count: 1 } },
+        { $sort: { count: -1 } },
+        { $limit: 10 },
+      ]),
+    ]);
+
+    // Fill missing days with 0
+    const dayMap = Object.fromEntries(dailyActivity.map((d) => [d.date, d.count]));
+    const filledDays = [];
+    for (let i = 0; i < days; i++) {
+      const d = new Date(since);
+      d.setUTCDate(d.getUTCDate() + i);
+      const key = d.toISOString().slice(0, 10);
+      filledDays.push({ date: key, count: dayMap[key] ?? 0 });
+    }
+
+    res.json({
+      success: true,
+      data: { dailyActivity: filledDays, byEventType, statusTransitions, days },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 const AGE_BUCKETS = ["< 16", "16-20", "21-25", "26-30", "30+"];
 
 const getCourseAgeStats = async (req, res, next) => {
@@ -910,4 +1034,5 @@ module.exports = {
   getCourseAgeStats,
   getDropoutStats,
   getFinanceStats,
+  getLeadActivityStats,
 };
