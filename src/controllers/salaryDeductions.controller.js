@@ -133,7 +133,7 @@ const confirmDeduction = async (req, res, next) => {
       entityId: confirmed._id,
       entity: confirmed,
       actor: recordService.actorFromReq(req),
-      refs: { teacherId: deduction.teacher, salaryId: salary._id },
+      refs: { teacherId: deduction.teacher, salaryId: salary?._id },
     });
 
     res.json({

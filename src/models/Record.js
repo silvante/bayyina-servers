@@ -44,6 +44,9 @@ const EVENT_TYPES = [
   "SALARY_UPDATED",
   "SALARY_PAID",
   "SALARY_DELETED",
+
+  // Deductions
+  "DEDUCTION_CONFIRMED",
 ];
 
 const ENTITY_TYPES = [
@@ -54,6 +57,7 @@ const ENTITY_TYPES = [
   "Payment",
   "Attendance",
   "Salary",
+  "SalaryDeduction",
   "System",
 ];
 
