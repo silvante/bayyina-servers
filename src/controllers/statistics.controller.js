@@ -4,6 +4,9 @@ const User = require("../models/User");
 const Enrollment = require("../models/Enrollment");
 const Payment = require("../models/Payment");
 const Attendance = require("../models/Attendance");
+const Salary = require("../models/Salary");
+const SalaryAdvance = require("../models/SalaryAdvance");
+const SalaryDeduction = require("../models/SalaryDeduction");
 
 function parseDateRange(query, field = "createdAt") {
   const filter = {};
@@ -727,6 +730,174 @@ const getInterestStats = async (req, res, next) => {
   }
 };
 
+const AGE_BUCKETS = ["< 16", "16-20", "21-25", "26-30", "30+"];
+
+const getCourseAgeStats = async (req, res, next) => {
+  try {
+    const dateFilter = parseDateRange(req.query, "createdAt");
+    const baseMatch = {
+      ...(Object.keys(dateFilter).length ? dateFilter : {}),
+      age: { $exists: true, $ne: null, $gt: 0 },
+      courseType: { $exists: true, $ne: null },
+    };
+
+    const raw = await Lead.aggregate([
+      { $match: baseMatch },
+      {
+        $addFields: {
+          ageBucket: {
+            $switch: {
+              branches: [
+                { case: { $lt: ["$age", 16] }, then: "< 16" },
+                { case: { $lte: ["$age", 20] }, then: "16-20" },
+                { case: { $lte: ["$age", 25] }, then: "21-25" },
+                { case: { $lte: ["$age", 30] }, then: "26-30" },
+              ],
+              default: "30+",
+            },
+          },
+        },
+      },
+      { $group: { _id: { courseType: "$courseType", ageBucket: "$ageBucket" }, count: { $sum: 1 } } },
+      {
+        $lookup: {
+          from: "coursetypes",
+          localField: "_id.courseType",
+          foreignField: "_id",
+          as: "courseInfo",
+        },
+      },
+      { $unwind: { path: "$courseInfo", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 0,
+          courseType: { $ifNull: ["$courseInfo.name", "Noma'lum"] },
+          ageBucket: "$_id.ageBucket",
+          count: 1,
+        },
+      },
+    ]);
+
+    const byType = {};
+    raw.forEach(({ courseType, ageBucket, count }) => {
+      if (!byType[courseType]) {
+        byType[courseType] = { courseType };
+        AGE_BUCKETS.forEach((b) => { byType[courseType][b] = 0; });
+      }
+      byType[courseType][ageBucket] = count;
+    });
+
+    res.json({
+      success: true,
+      data: {
+        ageBuckets: AGE_BUCKETS,
+        byCourseType: Object.values(byType).sort((a, b) => a.courseType.localeCompare(b.courseType)),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getDropoutStats = async (req, res, next) => {
+  try {
+    const period = req.query.period ?? "1y";
+    const now = new Date();
+    const sinceMap = {
+      "1m": new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, now.getUTCDate())),
+      "3m": new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3, 1)),
+      "6m": new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 6, 1)),
+      "1y": new Date(Date.UTC(now.getUTCFullYear() - 1, now.getUTCMonth(), 1)),
+    };
+    const since = sinceMap[period] ?? sinceMap["1y"];
+    const matchBase = { status: "dropped", updatedAt: { $gte: since } };
+
+    const [byReason, total] = await Promise.all([
+      Enrollment.aggregate([
+        { $match: { ...matchBase, dropReason: { $exists: true, $ne: null } } },
+        { $group: { _id: "$dropReason", count: { $sum: 1 } } },
+        {
+          $lookup: {
+            from: "rejectionreasons",
+            localField: "_id",
+            foreignField: "_id",
+            as: "reasonInfo",
+          },
+        },
+        { $unwind: { path: "$reasonInfo", preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            _id: 0,
+            reason: { $ifNull: ["$reasonInfo.title", "Noma'lum"] },
+            count: 1,
+          },
+        },
+        { $sort: { count: -1 } },
+      ]),
+      Enrollment.countDocuments(matchBase),
+    ]);
+
+    res.json({ success: true, data: { byReason, total, period } });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getFinanceStats = async (req, res, next) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getUTCFullYear();
+    const yearStart = new Date(Date.UTC(year, 0, 1));
+    const yearEnd   = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
+
+    const [salaryAgg, advanceAgg, deductionAgg] = await Promise.all([
+      Salary.aggregate([
+        { $match: { month: { $gte: yearStart, $lte: yearEnd } } },
+        { $group: { _id: { $month: "$month" }, totalNet: { $sum: "$netAmount" }, count: { $sum: 1 } } },
+      ]),
+      SalaryAdvance.aggregate([
+        { $match: { status: "confirmed", month: { $gte: yearStart, $lte: yearEnd } } },
+        { $group: { _id: { $month: "$month" }, total: { $sum: "$amount" }, count: { $sum: 1 } } },
+      ]),
+      SalaryDeduction.aggregate([
+        { $match: { status: "confirmed", month: { $gte: yearStart, $lte: yearEnd } } },
+        { $group: { _id: { $month: "$month" }, total: { $sum: "$amount" }, count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const toMap = (agg) => {
+      const m = {};
+      agg.forEach((r) => { m[r._id] = r; });
+      return m;
+    };
+
+    const salMap  = toMap(salaryAgg);
+    const advMap  = toMap(advanceAgg);
+    const dedMap  = toMap(deductionAgg);
+
+    const months = Array.from({ length: 12 }, (_, i) => {
+      const m = i + 1;
+      return {
+        month:          m,
+        year,
+        salaryPaid:     salMap[m]?.totalNet  ?? 0,
+        advances:       advMap[m]?.total      ?? 0,
+        deductions:     dedMap[m]?.total      ?? 0,
+        teacherCount:   salMap[m]?.count      ?? 0,
+      };
+    });
+
+    const totals = months.reduce((acc, m) => ({
+      salaryPaid:  acc.salaryPaid  + m.salaryPaid,
+      advances:    acc.advances    + m.advances,
+      deductions:  acc.deductions  + m.deductions,
+    }), { salaryPaid: 0, advances: 0, deductions: 0 });
+
+    res.json({ success: true, data: { year, months, totals } });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getOverview,
   getLeadStats,
@@ -736,4 +907,7 @@ module.exports = {
   getLeadManagerStats,
   getMonthlyIncomeStats,
   getInterestStats,
+  getCourseAgeStats,
+  getDropoutStats,
+  getFinanceStats,
 };

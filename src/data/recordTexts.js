@@ -112,6 +112,14 @@ const formatters = {
     `${a.name} ${fullName(m?.teacher)} ga ${fmtAmount(s?.netAmount)} so'm oylik to'ladi`,
   SALARY_DELETED: (s, a, m) =>
     `${a.name} ${fullName(m?.teacher)} oyligini o'chirdi`,
+
+  // Deductions
+  DEDUCTION_CONFIRMED: (d, a) =>
+    `${a.name} ${d?.teacherName ?? "o'qituvchi"} uchun ${fmtAmount(d?.amount)} so'm ushlab qolishni tasdiqladi`,
+
+  // Advances
+  ADVANCE_CONFIRMED: (adv, a) =>
+    `${a.name} ${adv?.teacherName ?? "o'qituvchi"} uchun ${fmtAmount(adv?.amount)} so'm avansni tasdiqladi`,
 };
 
 module.exports = {

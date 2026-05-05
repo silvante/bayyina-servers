@@ -10,6 +10,9 @@ const {
   getLeadManagerStats,
   getMonthlyIncomeStats,
   getInterestStats,
+  getCourseAgeStats,
+  getDropoutStats,
+  getFinanceStats,
 } = require("../controllers/statistics.controller");
 
 router.use(auth, roleCheck(["admin"]));
@@ -22,5 +25,8 @@ router.get("/revenue", getRevenueStats);
 router.get("/attendance", getAttendanceStats);
 router.get("/monthly-income", getMonthlyIncomeStats);
 router.get("/interests", getInterestStats);
+router.get("/course-age", getCourseAgeStats);
+router.get("/dropout-reasons", getDropoutStats);
+router.get("/finance", getFinanceStats);
 
 module.exports = router;
