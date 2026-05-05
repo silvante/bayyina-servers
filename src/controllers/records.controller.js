@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 const texts = require("../data/texts");
 const { getPagination, buildPaginationMeta } = require("../utils/helpers");
 const Record = require("../models/Record");
+const User = require("../models/User");
+const Lead = require("../models/Lead");
 
 const { EVENT_TYPES, ENTITY_TYPES } = Record;
 
@@ -163,4 +165,48 @@ const getEntityTimeline = async (req, res, next) => {
   }
 };
 
-module.exports = { getRecords, getRecord, getEntityTimeline };
+// GET /records/student/:studentId — full history for one student
+// Includes lead records matched by phone + all refs.studentId records
+const getStudentHistory = async (req, res, next) => {
+  try {
+    const { studentId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(studentId)) {
+      return res.status(400).json({ code: "invalidId", message: "ID noto'g'ri kiritildi" });
+    }
+
+    const { page, limit, skip } = getPagination(req.query);
+
+    const orClauses = [{ "refs.studentId": studentId }];
+
+    const student = await User.findById(studentId).select("phone");
+    if (student?.phone) {
+      const leads = await Lead.find({ phone: student.phone }).select("_id");
+      if (leads.length > 0) {
+        orClauses.push({ "refs.leadId": { $in: leads.map((l) => l._id) } });
+      }
+    }
+
+    const filter = { $or: orClauses };
+
+    const [records, total] = await Promise.all([
+      Record.find(filter)
+        .populate({ path: "actor.userId", select: "firstName lastName role" })
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 }),
+      Record.countDocuments(filter),
+    ]);
+
+    res.json({
+      records,
+      ...buildPaginationMeta(total, page, limit),
+      code: "recordsFound",
+      message: texts.recordsFound,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getRecords, getRecord, getEntityTimeline, getStudentHistory };

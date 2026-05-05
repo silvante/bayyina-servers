@@ -5,6 +5,7 @@ const {
   getRecords,
   getRecord,
   getEntityTimeline,
+  getStudentHistory,
 } = require("../controllers/records.controller");
 const { auth, roleCheck } = require("../middlewares/auth");
 
@@ -15,6 +16,7 @@ router.get(
   roleCheck(["admin"]),
   getEntityTimeline,
 );
+router.get("/student/:studentId", auth, roleCheck(["admin"]), getStudentHistory);
 router.get("/:id", auth, roleCheck(["admin"]), getRecord);
 
 module.exports = router;
