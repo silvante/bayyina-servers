@@ -19,8 +19,8 @@ const getGroups = async (req, res, next) => {
       filter.teacher = req.user._id;
     }
 
-    if (req.query.isActive === "true")  filter.isActive = true;
-    if (req.query.isActive === "false") filter.isActive = { $ne: true };
+    if (req.query.isActive === "true")  filter.isActive = { $ne: false };
+    if (req.query.isActive === "false") filter.isActive = false;
 
     const [groups, total] = await Promise.all([
       Group.find(filter)
@@ -236,8 +236,8 @@ const searchGroups = async (req, res, next) => {
       filter.teacher = req.query.teacher;
     }
 
-    if (req.query.isActive === "true")  filter.isActive = true;
-    if (req.query.isActive === "false") filter.isActive = { $ne: true };
+    if (req.query.isActive === "true")  filter.isActive = { $ne: false };
+    if (req.query.isActive === "false") filter.isActive = false;
 
     if (req.query.room) filter.room = buildSearchRegex(req.query.room);
     if (req.query.day) filter["schedule.days"] = req.query.day;

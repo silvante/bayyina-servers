@@ -289,20 +289,32 @@ const updateUser = async (req, res, next) => {
       "age",
       "source",
     ];
-    if (req.user.role === "admin") allowed.push("role", "password");
+    const isPrivileged = req.user.role === "admin" || req.user.role === "owner";
+    if (isPrivileged) allowed.push("role", "password");
 
     const existing = await User.findById(targetId).select("-password");
     if (!existing) {
       return res.status(404).json({ code: "userNotFound", message: texts.userNotFound });
     }
 
-    if (req.user.role === "admin" && existing.role === "teacher") {
+    if (isPrivileged && existing.role === "teacher") {
       allowed.push("salaryType", "salaryValue", "minSalary");
     }
 
     const updates = pickAllowedFields(req.body, allowed);
 
-    const user = await User.findByIdAndUpdate(targetId, updates, {
+    // telegramId has a unique sparse index — storing null causes duplicate key
+    // errors across multiple users. Use $unset instead of $set: null.
+    const unset = {};
+    if ("telegramId" in updates && (updates.telegramId === null || updates.telegramId === "")) {
+      delete updates.telegramId;
+      unset.telegramId = "";
+    }
+    const updateOp = {};
+    if (Object.keys(updates).length) updateOp.$set = updates;
+    if (Object.keys(unset).length)   updateOp.$unset = unset;
+
+    const user = await User.findByIdAndUpdate(targetId, updateOp, {
       new: true,
     }).select("-password");
 

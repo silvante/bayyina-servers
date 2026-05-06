@@ -677,7 +677,7 @@ const getMonthlyIncomeStats = async (req, res, next) => {
     const yearStart = new Date(Date.UTC(year, 0, 1));
     const yearEnd   = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
 
-    const [paidAgg, pendingAgg, overdueAgg] = await Promise.all([
+    const [paidAgg, pendingAgg, overdueAgg, salaryAgg] = await Promise.all([
       Payment.aggregate([
         { $match: { status: "paid", paidAt: { $gte: yearStart, $lte: yearEnd } } },
         { $group: { _id: { $month: "$paidAt" }, amount: { $sum: "$amount" }, count: { $sum: 1 } } },
@@ -689,6 +689,10 @@ const getMonthlyIncomeStats = async (req, res, next) => {
       Payment.aggregate([
         { $match: { status: "overdue", createdAt: { $gte: yearStart, $lte: yearEnd } } },
         { $group: { _id: { $month: "$createdAt" }, amount: { $sum: "$amount" }, count: { $sum: 1 } } },
+      ]),
+      Salary.aggregate([
+        { $match: { month: { $gte: yearStart, $lte: yearEnd } } },
+        { $group: { _id: { $month: "$month" }, totalSalary: { $sum: "$netAmount" }, paidSalary: { $sum: { $cond: [{ $eq: ["$status", "paid"] }, "$netAmount", 0] } }, count: { $sum: 1 } } },
       ]),
     ]);
 
@@ -702,22 +706,32 @@ const getMonthlyIncomeStats = async (req, res, next) => {
     const pending = byMonth(pendingAgg);
     const overdue = byMonth(overdueAgg);
 
+    const salaryByMonth = {};
+    salaryAgg.forEach((r) => {
+      salaryByMonth[r._id] = { totalSalary: r.totalSalary, paidSalary: r.paidSalary, count: r.count };
+    });
+
     const months = Array.from({ length: 12 }, (_, i) => {
       const m = i + 1;
+      const paidAmount = paid[m]?.amount ?? 0;
+      const teacherSalary = salaryByMonth[m]?.totalSalary ?? 0;
       return {
         month:   m,
         year,
-        paid:    paid[m]?.amount    ?? 0,
+        paid:    paidAmount,
         paidCount:    paid[m]?.count     ?? 0,
         pending: pending[m]?.amount  ?? 0,
         pendingCount: pending[m]?.count   ?? 0,
         overdue: overdue[m]?.amount  ?? 0,
         overdueCount: overdue[m]?.count   ?? 0,
-        total:   (paid[m]?.amount ?? 0) + (pending[m]?.amount ?? 0) + (overdue[m]?.amount ?? 0),
+        total:   paidAmount + (pending[m]?.amount ?? 0) + (overdue[m]?.amount ?? 0),
+        teacherSalary,
+        netProfit: paidAmount - teacherSalary,
       };
     });
 
     const totalPaid    = months.reduce((s, m) => s + m.paid, 0);
+    const totalSalaries = months.reduce((s, m) => s + m.teacherSalary, 0);
     const bestMonth    = months.reduce((best, m) => (m.paid > best.paid ? m : best), months[0]);
     const totalPayments = months.reduce((s, m) => s + m.paidCount, 0);
 
@@ -729,6 +743,8 @@ const getMonthlyIncomeStats = async (req, res, next) => {
         summary: {
           totalPaid,
           totalPayments,
+          totalSalaries,
+          totalNetProfit: totalPaid - totalSalaries,
           bestMonth: bestMonth.month,
           avgPerMonth: totalPayments > 0 ? Math.round(totalPaid / 12) : 0,
         },

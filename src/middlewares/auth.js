@@ -52,13 +52,14 @@ const auth = async (req, res, next) => {
 
 const roleCheck = (roles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({
-        code: "forbidden",
-        message: "Ruxsat berilmadi",
-      });
+    // owner is a superuser — always passes role checks
+    if (req.user.role === "owner" || roles.includes(req.user.role)) {
+      return next();
     }
-    next();
+    return res.status(403).json({
+      code: "forbidden",
+      message: "Ruxsat berilmadi",
+    });
   };
 };
 
